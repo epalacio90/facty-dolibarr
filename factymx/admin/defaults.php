@@ -47,6 +47,7 @@ if ($action === 'save' && $user->hasRight('factymx', 'config', 'write')) {
     dolibarr_set_const($db, 'FACTYMX_DEFAULT_SERIE', GETPOST('serie', 'alpha'), 'chaine', 0, '', $conf->entity);
     dolibarr_set_const($db, 'FACTYMX_DEFAULT_USOCFDI', GETPOST('usocfdi', 'alpha'), 'chaine', 0, '', $conf->entity);
     dolibarr_set_const($db, 'FACTYMX_DEFAULT_METODOPAGO', GETPOST('metodopago', 'alpha') === 'PPD' ? 'PPD' : 'PUE', 'chaine', 0, '', $conf->entity);
+    dolibarr_set_const($db, 'FACTYMX_AUTOSTAMP', GETPOST('autostamp', 'int') ? '1' : '0', 'chaine', 0, '', $conf->entity);
 
     // Formas de pago: una constante por medio de pago de Dolibarr.
     $formas = GETPOST('forma', 'array');
@@ -116,6 +117,18 @@ print '<option value="PUE"' . ($metodo === 'PUE' ? ' selected' : '') . '>PUE —
 print '<option value="PPD"' . ($metodo === 'PPD' ? ' selected' : '') . '>PPD — Pago en parcialidades o diferido</option>';
 print '</select>';
 print ' <span class="opacitymedium">Con PPD, el SAT obliga a emitir después un complemento de pago por cada abono.</span>';
+print '</td></tr>';
+
+print '<tr class="oddeven"><td>Timbrar al validar</td><td>';
+$auto = getDolGlobalString('FACTYMX_AUTOSTAMP') === '1';
+print '<input type="checkbox" name="autostamp" value="1"' . ($auto ? ' checked' : '') . '>';
+print ' <span class="opacitymedium">Apagado por omisión, y conviene dejarlo así salvo que lo pidas a conciencia: '
+    . 'validar una factura es una acción de Dolibarr, pero timbrar emite un comprobante fiscal y gasta un timbre. '
+    . 'Encendido, un clic en una pantalla que no habla de impuestos emite un CFDI ante el SAT, y deshacerlo '
+    . 'requiere cancelar — otro timbre y un motivo que justificar.</span>';
+if ($auto && FactyConfig::env() === FactyConfig::ENV_PROD) {
+    print '<br><span class="warning">Está encendido en PRODUCCIÓN: cada factura que valides se timbrará de verdad.</span>';
+}
 print '</td></tr>';
 print '</table><br>';
 

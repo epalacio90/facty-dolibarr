@@ -93,6 +93,12 @@ class modFactyMX extends DolibarrModules
             array('FACTYMX_TIMEOUT',       'chaine', '30',                            'Timeout HTTP en segundos', 0, 'current', 1),
             array('FACTYMX_MIN_TIMBRES',   'chaine', '10',                            'Avisar cuando el saldo de timbres baje de', 0, 'current', 1),
             array('FACTYMX_CATALOG_TTL',   'chaine', '7',                             'Días de caché de catálogos SAT', 0, 'current', 1),
+            // Timbrado automático al validar: apagado por omisión, y así debe
+            // quedarse salvo decisión explícita. Validar una factura es una
+            // acción de Dolibarr; timbrar emite un comprobante fiscal y gasta
+            // dinero. Encadenarlas sin que nadie lo pida convierte un clic en
+            // una pantalla que no habla de impuestos en un CFDI ante el SAT.
+            array('FACTYMX_AUTOSTAMP',     'chaine', '0',                             'Timbrar automáticamente al validar la factura', 0, 'current', 1),
         );
 
         // ---------------------------------------------------------------
@@ -149,6 +155,8 @@ class modFactyMX extends DolibarrModules
         // peor que no ofrecerlas todavía.
         // ---------------------------------------------------------------
         $this->tabs = array(
+            'invoice:+factymx:CFDI:factymx@factymx:'
+                . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/facture/cfdi.php?facid=__ID__',
             'thirdparty:+factymxfiscal:Datos fiscales CFDI:factymx@factymx:'
                 . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/societe/fiscal.php?socid=__ID__',
             'product:+factymxsat:Datos SAT:factymx@factymx:'
