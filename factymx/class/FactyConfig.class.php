@@ -1,4 +1,5 @@
 <?php
+
 /* Copyright (C) 2026 Facty — GPLv3, see LICENSE. */
 
 /**
@@ -43,14 +44,14 @@ class FactyConfig
 
     public static function baseUrl(?string $env = null): string
     {
-        return rtrim(getDolGlobalString('FACTYMX_API_BASE_'.self::suffix($env)), '/');
+        return rtrim(getDolGlobalString('FACTYMX_API_BASE_' . self::suffix($env)), '/');
     }
 
     /** Llave en claro. Se guarda cifrada con dolEncrypt y sólo se descifra al
      *  momento de usarla; nunca se registra en bitácora ni se devuelve a la UI. */
     public static function apiKey(?string $env = null): string
     {
-        $stored = getDolGlobalString('FACTYMX_API_KEY_'.self::suffix($env));
+        $stored = getDolGlobalString('FACTYMX_API_KEY_' . self::suffix($env));
         if ($stored === '') {
             return '';
         }
@@ -62,7 +63,7 @@ class FactyConfig
      *  administrador nunca lo teclea. */
     public static function orgSlug(?string $env = null): string
     {
-        return getDolGlobalString('FACTYMX_ORG_SLUG_'.self::suffix($env));
+        return getDolGlobalString('FACTYMX_ORG_SLUG_' . self::suffix($env));
     }
 
     public static function isConfigured(?string $env = null): bool
@@ -88,7 +89,7 @@ class FactyConfig
             return '';
         }
 
-        return substr($plain, 0, 8).str_repeat('•', 12);
+        return substr($plain, 0, 8) . str_repeat('•', 12);
     }
 
     /**

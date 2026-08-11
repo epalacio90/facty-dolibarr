@@ -8,15 +8,32 @@
     <arg name="extensions" value="php"/>
     <arg name="colors"/>
     <arg value="p"/>
+    <!-- Los avisos (longitud de línea, sobre todo en comentarios largos) no
+         tumban la compilación; los errores sí. -->
+    <config name="ignore_warnings_on_exit" value="1"/>
 
     <rule ref="PSR12">
         <!-- Las páginas de Dolibarr mezclan lógica y salida por diseño del core:
              un archivo de pantalla no es una clase y no puede cumplir "side
              effects OR declarations". -->
         <exclude name="PSR1.Files.SideEffects"/>
-        <!-- Dolibarr exige que la clase del descriptor se llame modFactyMX y
-             viva en modFactyMX.class.php; el estándar querría otro nombre. -->
+        <!-- Dolibarr descubre el descriptor por nombre: la clase DEBE llamarse
+             modFactyMX y vivir en modFactyMX.class.php. No es una preferencia
+             de estilo, es cómo el core carga el módulo. -->
+        <exclude name="Squiz.Classes.ValidClassName.NotCamelCaps"/>
+        <!-- Los módulos de Dolibarr viven en el espacio global: el core carga el
+             descriptor por nombre de clase y hace dol_include_once de los
+             archivos. Ponerlos en un namespace rompe el descubrimiento. Es una
+             restricción del anfitrión, no una preferencia nuestra. -->
         <exclude name="PSR1.Classes.ClassDeclaration.MissingNamespace"/>
+    </rule>
+
+    <!-- Las tres excepciones del cliente son un conjunto pequeño y cerrado que
+         siempre se lee junto; partirlas en tres archivos de una línea sería
+         fragmentar por cumplir la regla, no por claridad. La exención está
+         acotada a ese archivo: en el resto del módulo la regla sigue viva. -->
+    <rule ref="PSR1.Classes.ClassDeclaration.MultipleClasses">
+        <exclude-pattern>*/class/FactyExceptions.class.php</exclude-pattern>
     </rule>
 
     <rule ref="Generic.Files.LineLength">

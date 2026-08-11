@@ -1,7 +1,8 @@
 <?php
+
 /* Copyright (C) 2026 Facty — GPLv3, see LICENSE. */
 
-require_once __DIR__.'/FactyConfig.class.php';
+require_once __DIR__ . '/FactyConfig.class.php';
 
 /**
  * \file    class/FactyCfdi.class.php
@@ -64,10 +65,10 @@ class FactyCfdi
 
         $env = $env ?? FactyConfig::env();
 
-        $sql = 'SELECT * FROM '.MAIN_DB_PREFIX."factymx_cfdi
-                WHERE fk_facture = ".((int) $factureId)."
-                  AND entity = ".((int) $conf->entity)."
-                  AND env = '".$db->escape($env)."'";
+        $sql = 'SELECT * FROM ' . MAIN_DB_PREFIX . "factymx_cfdi
+                WHERE fk_facture = " . ((int) $factureId) . "
+                  AND entity = " . ((int) $conf->entity) . "
+                  AND env = '" . $db->escape($env) . "'";
 
         $res = $db->query($sql);
         if (!$res) {
@@ -92,10 +93,10 @@ class FactyCfdi
 
         $env = $env ?? FactyConfig::env();
 
-        $sql = 'SELECT * FROM '.MAIN_DB_PREFIX."factymx_cfdi
-                WHERE uuid = '".$db->escape($uuid)."'
-                  AND entity = ".((int) $conf->entity)."
-                  AND env = '".$db->escape($env)."'";
+        $sql = 'SELECT * FROM ' . MAIN_DB_PREFIX . "factymx_cfdi
+                WHERE uuid = '" . $db->escape($uuid) . "'
+                  AND entity = " . ((int) $conf->entity) . "
+                  AND env = '" . $db->escape($env) . "'";
 
         $res = $db->query($sql);
         if (!$res) {
@@ -147,23 +148,23 @@ class FactyCfdi
             return 0;
         }
 
-        $sql = 'INSERT INTO '.MAIN_DB_PREFIX.'factymx_cfdi
+        $sql = 'INSERT INTO ' . MAIN_DB_PREFIX . 'factymx_cfdi
                 (fk_facture, entity, env, cfdi_type, status, idempotency_key, fk_user_creat, datec)
                 VALUES ('
-                .((int) $this->fk_facture).', '
-                .((int) $this->entity).", '"
-                .$this->db->escape($this->env)."', '"
-                .$this->db->escape($this->cfdi_type)."', '"
-                .$this->db->escape(self::STATUS_PENDING)."', '"
-                .$this->db->escape($this->idempotency_key)."', "
-                .((int) ($user->id ?? 0)).", '"
-                .$this->db->idate(dol_now())."')";
+                . ((int) $this->fk_facture) . ', '
+                . ((int) $this->entity) . ", '"
+                . $this->db->escape($this->env) . "', '"
+                . $this->db->escape($this->cfdi_type) . "', '"
+                . $this->db->escape(self::STATUS_PENDING) . "', '"
+                . $this->db->escape($this->idempotency_key) . "', "
+                . ((int) ($user->id ?? 0)) . ", '"
+                . $this->db->idate(dol_now()) . "')";
 
         if (!$this->db->query($sql)) {
             return -1;
         }
 
-        $this->id = (int) $this->db->last_insert_id(MAIN_DB_PREFIX.'factymx_cfdi');
+        $this->id = (int) $this->db->last_insert_id(MAIN_DB_PREFIX . 'factymx_cfdi');
         $this->status = self::STATUS_PENDING;
 
         return $this->id;
@@ -198,23 +199,23 @@ class FactyCfdi
 
     public function update(): int
     {
-        $sql = 'UPDATE '.MAIN_DB_PREFIX.'factymx_cfdi SET '
-            ."facty_invoice_id = ".$this->q($this->facty_invoice_id).', '
-            ."uuid = ".$this->q($this->uuid).', '
-            ."serie = ".$this->q($this->serie).', '
-            .'folio = '.($this->folio === null ? 'NULL' : (int) $this->folio).', '
-            ."status = '".$this->db->escape($this->status)."', "
-            .'total = '.($this->total === null ? 'NULL' : (float) $this->total).', '
-            ."moneda = ".$this->q($this->moneda).', '
-            ."stamped_at = ".$this->q($this->stamped_at).', '
-            ."cancelled_at = ".$this->q($this->cancelled_at).', '
-            ."cancel_motivo = ".$this->q($this->cancel_motivo).', '
-            ."xml_path = ".$this->q($this->xml_path).', '
-            ."pdf_path = ".$this->q($this->pdf_path).', '
-            ."acuse_path = ".$this->q($this->acuse_path).', '
-            ."last_error = ".$this->q($this->last_error).', '
-            ."facty_request_id = ".$this->q($this->facty_request_id)
-            .' WHERE rowid = '.((int) $this->id);
+        $sql = 'UPDATE ' . MAIN_DB_PREFIX . 'factymx_cfdi SET '
+            . "facty_invoice_id = " . $this->q($this->facty_invoice_id) . ', '
+            . "uuid = " . $this->q($this->uuid) . ', '
+            . "serie = " . $this->q($this->serie) . ', '
+            . 'folio = ' . ($this->folio === null ? 'NULL' : (int) $this->folio) . ', '
+            . "status = '" . $this->db->escape($this->status) . "', "
+            . 'total = ' . ($this->total === null ? 'NULL' : (float) $this->total) . ', '
+            . "moneda = " . $this->q($this->moneda) . ', '
+            . "stamped_at = " . $this->q($this->stamped_at) . ', '
+            . "cancelled_at = " . $this->q($this->cancelled_at) . ', '
+            . "cancel_motivo = " . $this->q($this->cancel_motivo) . ', '
+            . "xml_path = " . $this->q($this->xml_path) . ', '
+            . "pdf_path = " . $this->q($this->pdf_path) . ', '
+            . "acuse_path = " . $this->q($this->acuse_path) . ', '
+            . "last_error = " . $this->q($this->last_error) . ', '
+            . "facty_request_id = " . $this->q($this->facty_request_id)
+            . ' WHERE rowid = ' . ((int) $this->id);
 
         return $this->db->query($sql) ? 1 : -1;
     }
@@ -222,7 +223,7 @@ class FactyCfdi
     /** Escapa o devuelve NULL. Nada se concatena crudo. */
     private function q(?string $v): string
     {
-        return $v === null || $v === '' ? 'NULL' : "'".$this->db->escape($v)."'";
+        return $v === null || $v === '' ? 'NULL' : "'" . $this->db->escape($v) . "'";
     }
 
     private function hydrate($row): void

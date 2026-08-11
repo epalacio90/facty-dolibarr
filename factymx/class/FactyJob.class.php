@@ -1,9 +1,10 @@
 <?php
+
 /* Copyright (C) 2026 Facty — GPLv3, see LICENSE. */
 
-require_once __DIR__.'/FactyConfig.class.php';
-require_once __DIR__.'/FactyClient.class.php';
-require_once __DIR__.'/FactyCfdi.class.php';
+require_once __DIR__ . '/FactyConfig.class.php';
+require_once __DIR__ . '/FactyClient.class.php';
+require_once __DIR__ . '/FactyCfdi.class.php';
 
 /**
  * \file    class/FactyJob.class.php
@@ -71,11 +72,11 @@ class FactyJob
         $entity = (int) $conf->entity;
         $env    = FactyConfig::env();
 
-        $sql = 'SELECT rowid FROM '.MAIN_DB_PREFIX."factymx_job
-                WHERE entity = ".$entity." AND env = '".$db->escape($env)."'
-                  AND kind = '".$db->escape($kind)."'
-                  AND ref_table = '".$db->escape($refTable)."' AND ref_id = ".((int) $refId)."
-                  AND status = '".$db->escape(self::STATUS_PENDING)."'";
+        $sql = 'SELECT rowid FROM ' . MAIN_DB_PREFIX . "factymx_job
+                WHERE entity = " . $entity . " AND env = '" . $db->escape($env) . "'
+                  AND kind = '" . $db->escape($kind) . "'
+                  AND ref_table = '" . $db->escape($refTable) . "' AND ref_id = " . ((int) $refId) . "
+                  AND status = '" . $db->escape(self::STATUS_PENDING) . "'";
         $res = $db->query($sql);
         if ($res && ($row = $db->fetch_object($res))) {
             $db->free($res);
@@ -85,19 +86,19 @@ class FactyJob
 
         $nextRun = dol_time_plus_duree(dol_now(), $delaySeconds, 's');
 
-        $sql = 'INSERT INTO '.MAIN_DB_PREFIX.'factymx_job
+        $sql = 'INSERT INTO ' . MAIN_DB_PREFIX . 'factymx_job
                 (entity, env, kind, ref_table, ref_id, payload_json, attempts, next_run_at, status, datec)
                 VALUES ('
-                .$entity.", '".$db->escape($env)."', '"
-                .$db->escape($kind)."', '"
-                .$db->escape($refTable)."', "
-                .((int) $refId).', '
-                .($payload === null ? 'NULL' : "'".$db->escape(json_encode($payload, JSON_UNESCAPED_UNICODE))."'").', '
-                ."0, '".$db->idate($nextRun)."', '"
-                .$db->escape(self::STATUS_PENDING)."', '"
-                .$db->idate(dol_now())."')";
+                . $entity . ", '" . $db->escape($env) . "', '"
+                . $db->escape($kind) . "', '"
+                . $db->escape($refTable) . "', "
+                . ((int) $refId) . ', '
+                . ($payload === null ? 'NULL' : "'" . $db->escape(json_encode($payload, JSON_UNESCAPED_UNICODE)) . "'") . ', '
+                . "0, '" . $db->idate($nextRun) . "', '"
+                . $db->escape(self::STATUS_PENDING) . "', '"
+                . $db->idate(dol_now()) . "')";
 
-        return $db->query($sql) ? (int) $db->last_insert_id(MAIN_DB_PREFIX.'factymx_job') : -1;
+        return $db->query($sql) ? (int) $db->last_insert_id(MAIN_DB_PREFIX . 'factymx_job') : -1;
     }
 
     /**
@@ -117,16 +118,16 @@ class FactyJob
         // las credenciales, los ids y las consecuencias son otras.
         $env = FactyConfig::env();
         if (!FactyConfig::isConfigured($env)) {
-            $this->output = 'Facty no está configurado para el ambiente '.FactyConfig::label($env).'; no hay nada que hacer.';
+            $this->output = 'Facty no está configurado para el ambiente ' . FactyConfig::label($env) . '; no hay nada que hacer.';
 
             return 0;
         }
 
-        $sql = 'SELECT * FROM '.MAIN_DB_PREFIX."factymx_job
-                WHERE status = '".$this->db->escape(self::STATUS_PENDING)."'
-                  AND entity = ".((int) $conf->entity)."
-                  AND env = '".$this->db->escape($env)."'
-                  AND (next_run_at IS NULL OR next_run_at <= '".$this->db->idate(dol_now())."')
+        $sql = 'SELECT * FROM ' . MAIN_DB_PREFIX . "factymx_job
+                WHERE status = '" . $this->db->escape(self::STATUS_PENDING) . "'
+                  AND entity = " . ((int) $conf->entity) . "
+                  AND env = '" . $this->db->escape($env) . "'
+                  AND (next_run_at IS NULL OR next_run_at <= '" . $this->db->idate(dol_now()) . "')
                 ORDER BY next_run_at ASC
                 LIMIT 50";
 
@@ -167,7 +168,7 @@ class FactyJob
         }
         $this->db->free($res);
 
-        $this->output = 'Trabajos procesados: '.$done.' correctos, '.$failed.' con incidencias ('.FactyConfig::label($env).').';
+        $this->output = 'Trabajos procesados: ' . $done . ' correctos, ' . $failed . ' con incidencias (' . FactyConfig::label($env) . ').';
 
         return 0;
     }
@@ -185,9 +186,9 @@ class FactyJob
                 // Se implementan en las sub-fases E, F e I. Un trabajo de un
                 // tipo que este build no conoce se deja pendiente en lugar de
                 // borrarse: puede ser de una versión más nueva del módulo.
-                throw new Exception('Tipo de trabajo aún no implementado en esta versión: '.$row->kind);
+                throw new Exception('Tipo de trabajo aún no implementado en esta versión: ' . $row->kind);
             default:
-                throw new Exception('Tipo de trabajo desconocido: '.$row->kind);
+                throw new Exception('Tipo de trabajo desconocido: ' . $row->kind);
         }
     }
 
@@ -201,10 +202,10 @@ class FactyJob
      */
     private function reconcileCfdi(int $cfdiRowId): void
     {
-        $sql = 'SELECT * FROM '.MAIN_DB_PREFIX.'factymx_cfdi WHERE rowid = '.((int) $cfdiRowId);
+        $sql = 'SELECT * FROM ' . MAIN_DB_PREFIX . 'factymx_cfdi WHERE rowid = ' . ((int) $cfdiRowId);
         $res = $this->db->query($sql);
         if (!$res || !($row = $this->db->fetch_object($res))) {
-            throw new Exception('No se encontró el registro de CFDI '.$cfdiRowId.'.');
+            throw new Exception('No se encontró el registro de CFDI ' . $cfdiRowId . '.');
         }
         $this->db->free($res);
 
@@ -218,7 +219,7 @@ class FactyJob
         // la factura ya existe y viene con su UUID.
         $found = $client->request(
             'GET',
-            $client->orgPath('invoices?idempotencyKey='.rawurlencode($row->idempotency_key))
+            $client->orgPath('invoices?idempotencyKey=' . rawurlencode($row->idempotency_key))
         );
 
         $invoices = isset($found['invoices']) && is_array($found['invoices']) ? $found['invoices'] : array();
@@ -235,7 +236,7 @@ class FactyJob
 
         $cfdi->markFailed(
             'El timbrado no se completó y Facty no tiene ningún CFDI con esta llave de idempotencia. '
-            .'Puedes volver a intentarlo desde la factura.'
+            . 'Puedes volver a intentarlo desde la factura.'
         );
     }
 
@@ -247,7 +248,7 @@ class FactyJob
             $this->finish(
                 (int) $row->rowid,
                 self::STATUS_FAILED,
-                'Se agotaron los reintentos ('.self::MAX_ATTEMPTS.'). Último error: '.$error
+                'Se agotaron los reintentos (' . self::MAX_ATTEMPTS . '). Último error: ' . $error
             );
 
             return;
@@ -257,20 +258,20 @@ class FactyJob
         // cada 5 minutos contra un servicio caído sólo alarga el incidente.
         $delay = min(3600, 60 * (2 ** ($attempts - 1)));
 
-        $sql = 'UPDATE '.MAIN_DB_PREFIX.'factymx_job SET '
-            .'attempts = '.$attempts.", "
-            ."next_run_at = '".$this->db->idate(dol_time_plus_duree(dol_now(), $delay, 's'))."', "
-            ."last_error = '".$this->db->escape($error)."' "
-            .'WHERE rowid = '.((int) $row->rowid);
+        $sql = 'UPDATE ' . MAIN_DB_PREFIX . 'factymx_job SET '
+            . 'attempts = ' . $attempts . ", "
+            . "next_run_at = '" . $this->db->idate(dol_time_plus_duree(dol_now(), $delay, 's')) . "', "
+            . "last_error = '" . $this->db->escape($error) . "' "
+            . 'WHERE rowid = ' . ((int) $row->rowid);
 
         $this->db->query($sql);
     }
 
     private function finish(int $rowId, string $status, ?string $error): void
     {
-        $sql = 'UPDATE '.MAIN_DB_PREFIX."factymx_job SET status = '".$this->db->escape($status)."', "
-            .'last_error = '.($error === null ? 'NULL' : "'".$this->db->escape($error)."'").' '
-            .'WHERE rowid = '.$rowId;
+        $sql = 'UPDATE ' . MAIN_DB_PREFIX . "factymx_job SET status = '" . $this->db->escape($status) . "', "
+            . 'last_error = ' . ($error === null ? 'NULL' : "'" . $this->db->escape($error) . "'") . ' '
+            . 'WHERE rowid = ' . $rowId;
 
         $this->db->query($sql);
     }

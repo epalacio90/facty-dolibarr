@@ -1,4 +1,5 @@
 <?php
+
 /* Copyright (C) 2026 Facty
  *
  * This program is free software: you can redistribute it and/or modify
@@ -29,7 +30,7 @@
  * cada registro local queda marcado con el ambiente en el que se creó.
  */
 
-require_once DOL_DOCUMENT_ROOT.'/core/modules/DolibarrModules.class.php';
+require_once DOL_DOCUMENT_ROOT . '/core/modules/DolibarrModules.class.php';
 
 class modFactyMX extends DolibarrModules
 {
@@ -48,11 +49,11 @@ class modFactyMX extends DolibarrModules
         $this->name = preg_replace('/^mod/i', '', get_class($this));
         $this->description = 'Timbrado de CFDI 4.0 con Facty: facturas, notas de crédito y complementos de pago.';
         $this->descriptionlong = 'Conecta Dolibarr con Facty por API REST para timbrar CFDI 4.0 ante el SAT. '
-            .'El certificado (CSD) y las credenciales del PAC viven en Facty, nunca en este servidor.';
+            . 'El certificado (CSD) y las credenciales del PAC viven en Facty, nunca en este servidor.';
         $this->editor_name = 'Facty';
         $this->editor_url = 'https://facty.mx';
         $this->version = '0.1.0';
-        $this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
+        $this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
         $this->picto = 'factymx@factymx';
 
         // Sólo Dolibarr 18+. No hay directorio backport/ y no se aceptan cores

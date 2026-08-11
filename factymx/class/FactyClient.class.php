@@ -1,79 +1,9 @@
 <?php
+
 /* Copyright (C) 2026 Facty — GPLv3, see LICENSE. */
 
-require_once __DIR__.'/FactyConfig.class.php';
-
-/** La configuración del módulo está incompleta o es inconsistente. */
-class FactyConfigException extends Exception {}
-
-/**
- * Fallo de red: la petición NO llegó, o no sabemos si llegó.
- *
- * Es una excepción aparte a propósito. Un timeout no es "no se timbró", es "no
- * sé": la petición puede haber llegado y el CFDI puede existir ya. Quien la
- * atrape debe encolar una reconciliación por idempotency_key, nunca reintentar
- * a ciegas — cada reintento a ciegas puede gastar un timbre real.
- */
-class FactyTransportException extends Exception {}
-
-/**
- * Error de negocio devuelto por Facty, con el sobre estándar
- * { error, code, requestId, fieldErrors? }.
- */
-class FactyApiException extends Exception
-{
-    public int $httpStatus;
-    public string $factyCode;
-    public ?string $requestId;
-    /** @var array<string,string> */
-    public array $fieldErrors;
-
-    public function __construct(
-        int $httpStatus,
-        string $message,
-        string $factyCode = '',
-        ?string $requestId = null,
-        array $fieldErrors = []
-    ) {
-        parent::__construct($message, $httpStatus);
-        $this->httpStatus  = $httpStatus;
-        $this->factyCode   = $factyCode;
-        $this->requestId   = $requestId;
-        $this->fieldErrors = $fieldErrors;
-    }
-
-    /**
-     * ¿Tiene sentido reintentar esto solo?
-     *
-     * 401/403/402/422 son definitivos: la llave está mal, falta un permiso, no
-     * hay timbres o el documento es inválido. Reintentar sin que cambie nada
-     * fuera sólo repite el mismo error y, en el caso de 429, empeora.
-     */
-    public function isRetryable(): bool
-    {
-        return $this->httpStatus === 429 || $this->httpStatus >= 500;
-    }
-
-    /** Mensaje accionable para el usuario, en vez del texto crudo del API. */
-    public function userMessage(): string
-    {
-        switch ($this->factyCode) {
-            case 'UNAUTHORIZED':
-            case 'INVALID_API_KEY':
-                return 'La API key de Facty es inválida o fue revocada. Revísala en la configuración del módulo.';
-            case 'MISSING_SCOPE':
-                return 'Tu llave de Facty no tiene el permiso necesario para esta operación: '.$this->getMessage();
-            case 'ORG_MISMATCH':
-                return 'La llave configurada pertenece a otra organización de Facty.';
-            case 'INSUFFICIENT_TIMBRES':
-                return 'No hay timbres disponibles en Facty. Recarga tu saldo para continuar.';
-            case 'RATE_LIMITED':
-                return 'Facty está limitando las peticiones. El módulo reintentará automáticamente.';
-            default:
-                return $this->getMessage();
-        }
-    }
-}
+require_once __DIR__ . '/FactyConfig.class.php';
+require_once __DIR__ . '/FactyExceptions.class.php';
 
 /**
  * \file    class/FactyClient.class.php
@@ -90,7 +20,7 @@ class FactyClient
     private string $baseUrl;
     private string $apiKey;
     private string $orgSlug;
-    private int    $timeout;
+    private int $timeout;
 
     /** @var callable|null Registrador opcional: fn(array $entry): void */
     private $logger;
@@ -110,19 +40,19 @@ class FactyClient
 
         if ($this->baseUrl === '') {
             throw new FactyConfigException(
-                'Falta la URL de Facty para el ambiente '.FactyConfig::label($this->env).'.'
+                'Falta la URL de Facty para el ambiente ' . FactyConfig::label($this->env) . '.'
             );
         }
         if ($this->apiKey === '') {
             throw new FactyConfigException(
-                'Falta la API key de Facty para el ambiente '.FactyConfig::label($this->env)
-                .'. Configúrala en Inicio → Configuración → Módulos → Facty.'
+                'Falta la API key de Facty para el ambiente ' . FactyConfig::label($this->env)
+                . '. Configúrala en Inicio → Configuración → Módulos → Facty.'
             );
         }
         if ($requireOrg && $this->orgSlug === '') {
             throw new FactyConfigException(
                 'Todavía no se ha probado la conexión con Facty en el ambiente '
-                .FactyConfig::label($this->env).'. Usa "Probar conexión" para completarla.'
+                . FactyConfig::label($this->env) . '. Usa "Probar conexión" para completarla.'
             );
         }
     }
@@ -140,7 +70,7 @@ class FactyClient
     /** Ruta dentro de la organización: /authenticated/{org}/... */
     public function orgPath(string $suffix): string
     {
-        return '/authenticated/'.rawurlencode($this->orgSlug).'/'.ltrim($suffix, '/');
+        return '/authenticated/' . rawurlencode($this->orgSlug) . '/' . ltrim($suffix, '/');
     }
 
     /**
@@ -157,7 +87,7 @@ class FactyClient
             throw new FactyConfigException('Se requiere el slug de la organización para consultar el contexto.');
         }
 
-        return $this->request('GET', '/authenticated/'.rawurlencode($slug).'/context');
+        return $this->request('GET', '/authenticated/' . rawurlencode($slug) . '/context');
     }
 
     /**
@@ -168,14 +98,14 @@ class FactyClient
      */
     public function request(string $method, string $path, ?array $payload = null): array
     {
-        $url       = $this->baseUrl.$path;
+        $url       = $this->baseUrl . $path;
         $requestId = null;
         $startedAt = microtime(true);
 
         $headers = array(
-            'X-API-Key: '.$this->apiKey,
+            'X-API-Key: ' . $this->apiKey,
             'Accept: application/json',
-            'User-Agent: factymx/'.FACTYMX_VERSION.' dolibarr/'.DOL_VERSION,
+            'User-Agent: factymx/' . FACTYMX_VERSION . ' dolibarr/' . DOL_VERSION,
         );
 
         $ch = curl_init($url);
@@ -214,11 +144,11 @@ class FactyClient
         $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
 
         if ($raw === false) {
-            $this->log($method, $path, 0, null, $requestId, $durationMs, 'transport: '.$curlErr);
+            $this->log($method, $path, 0, null, $requestId, $durationMs, 'transport: ' . $curlErr);
 
             throw new FactyTransportException(
-                'No se pudo contactar a Facty ('.$curlErr.'). El resultado es DESCONOCIDO: '
-                .'la petición pudo haber llegado. No reintentes sin reconciliar.'
+                'No se pudo contactar a Facty (' . $curlErr . '). El resultado es DESCONOCIDO: '
+                . 'la petición pudo haber llegado. No reintentes sin reconciliar.'
             );
         }
 
@@ -233,7 +163,7 @@ class FactyClient
         if ($status >= 400) {
             throw new FactyApiException(
                 $status,
-                isset($body['error']) ? (string) $body['error'] : ('Error HTTP '.$status),
+                isset($body['error']) ? (string) $body['error'] : ('Error HTTP ' . $status),
                 $code,
                 $requestId ?? (isset($body['requestId']) ? (string) $body['requestId'] : null),
                 isset($body['fieldErrors']) && is_array($body['fieldErrors']) ? $body['fieldErrors'] : array()
@@ -257,7 +187,7 @@ class FactyClient
         curl_setopt($ch, CURLOPT_PROXYPORT, getDolGlobalInt('MAIN_PROXY_PORT'));
         $user = getDolGlobalString('MAIN_PROXY_USER');
         if ($user !== '') {
-            curl_setopt($ch, CURLOPT_PROXYUSERPWD, $user.':'.getDolGlobalString('MAIN_PROXY_PASS'));
+            curl_setopt($ch, CURLOPT_PROXYUSERPWD, $user . ':' . getDolGlobalString('MAIN_PROXY_PASS'));
         }
     }
 
@@ -276,8 +206,8 @@ class FactyClient
         ?string $message
     ): void {
         dol_syslog(
-            'FactyClient '.$method.' '.$path.' → '.$status
-            .' env='.$this->env.' req='.($requestId ?? '-'),
+            'FactyClient ' . $method . ' ' . $path . ' → ' . $status
+            . ' env=' . $this->env . ' req=' . ($requestId ?? '-'),
             $status >= 400 || $status === 0 ? LOG_WARNING : LOG_INFO
         );
 

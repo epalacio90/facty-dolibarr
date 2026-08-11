@@ -1,7 +1,8 @@
 <?php
+
 /* Copyright (C) 2026 Facty — GPLv3, see LICENSE. */
 
-require_once __DIR__.'/../class/FactyConfig.class.php';
+require_once __DIR__ . '/../class/FactyConfig.class.php';
 
 if (!defined('FACTYMX_VERSION')) {
     define('FACTYMX_VERSION', '0.1.0');
@@ -59,11 +60,11 @@ function factymxEnvBanner()
     $host = FactyConfig::baseUrl();
 
     return '<div class="factymx-env-banner" role="status">'
-        .'<strong>MODO PRUEBAS</strong> — los comprobantes que emitas aquí '
-        .'<strong>no tienen validez fiscal</strong>. '
-        .'Conectado a '.dol_escape_htmltag($host !== '' ? $host : 'preview.facty.mx').'. '
-        .'<a href="'.dol_buildpath('/factymx/admin/setup.php', 1).'">Cambiar ambiente</a>'
-        .'</div>';
+        . '<strong>MODO PRUEBAS</strong> — los comprobantes que emitas aquí '
+        . '<strong>no tienen validez fiscal</strong>. '
+        . 'Conectado a ' . dol_escape_htmltag($host !== '' ? $host : 'preview.facty.mx') . '. '
+        . '<a href="' . dol_buildpath('/factymx/admin/setup.php', 1) . '">Cambiar ambiente</a>'
+        . '</div>';
 }
 
 /**
@@ -101,5 +102,5 @@ function factymxIdempotencyKey($objectType, $objectId)
 {
     global $conf;
 
-    return 'dolibarr:'.FactyConfig::env().':'.((int) $conf->entity).':'.$objectType.':'.((int) $objectId);
+    return 'dolibarr:' . FactyConfig::env() . ':' . ((int) $conf->entity) . ':' . $objectType . ':' . ((int) $objectId);
 }

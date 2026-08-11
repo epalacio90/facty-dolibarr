@@ -1,4 +1,5 @@
 <?php
+
 /* Copyright (C) 2026 Facty — GPLv3, see LICENSE. */
 
 /**
@@ -24,10 +25,10 @@ if (!$res) {
     die('Include of main fails');
 }
 
-require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
-require_once __DIR__.'/../lib/factymx.lib.php';
-require_once __DIR__.'/../class/FactyConfig.class.php';
-require_once __DIR__.'/../class/FactyClient.class.php';
+require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
+require_once __DIR__ . '/../lib/factymx.lib.php';
+require_once __DIR__ . '/../class/FactyConfig.class.php';
+require_once __DIR__ . '/../class/FactyClient.class.php';
 
 global $db, $langs, $user, $conf;
 
@@ -53,27 +54,27 @@ function factymxSaveEnv($db, $conf, string $env, array &$messages): void
 {
     $suffix = FactyConfig::suffix($env);
 
-    $base = trim(GETPOST('api_base_'.strtolower($env), 'alpha'));
+    $base = trim(GETPOST('api_base_' . strtolower($env), 'alpha'));
     if ($base !== '') {
         if (!preg_match('#^https://#i', $base)) {
             // No es purismo: la llave viaja en cada petición. Sobre HTTP plano
             // se entrega a cualquiera que esté en la ruta.
-            $messages[] = array('level' => 'errors', 'text' => 'La URL de '.FactyConfig::label($env).' debe usar https://.');
+            $messages[] = array('level' => 'errors', 'text' => 'La URL de ' . FactyConfig::label($env) . ' debe usar https://.');
         } else {
-            dolibarr_set_const($db, 'FACTYMX_API_BASE_'.$suffix, rtrim($base, '/'), 'chaine', 0, '', $conf->entity);
+            dolibarr_set_const($db, 'FACTYMX_API_BASE_' . $suffix, rtrim($base, '/'), 'chaine', 0, '', $conf->entity);
         }
     }
 
-    $key = trim(GETPOST('api_key_'.strtolower($env), 'restricthtml'));
+    $key = trim(GETPOST('api_key_' . strtolower($env), 'restricthtml'));
     if ($key !== '') {
         if (strpos($key, 'fk_') !== 0) {
-            $messages[] = array('level' => 'errors', 'text' => 'La API key de '.FactyConfig::label($env).' no tiene el formato esperado (debe empezar con fk_).');
+            $messages[] = array('level' => 'errors', 'text' => 'La API key de ' . FactyConfig::label($env) . ' no tiene el formato esperado (debe empezar con fk_).');
         } else {
-            dolibarr_set_const($db, 'FACTYMX_API_KEY_'.$suffix, dolEncrypt($key), 'chaine', 0, '', $conf->entity);
+            dolibarr_set_const($db, 'FACTYMX_API_KEY_' . $suffix, dolEncrypt($key), 'chaine', 0, '', $conf->entity);
             // La llave cambió: el slug descubierto ya no necesariamente
             // corresponde a esa llave. Se limpia para forzar "Probar conexión"
             // y que no quede apuntando a otra organización.
-            dolibarr_set_const($db, 'FACTYMX_ORG_SLUG_'.$suffix, '', 'chaine', 0, '', $conf->entity);
+            dolibarr_set_const($db, 'FACTYMX_ORG_SLUG_' . $suffix, '', 'chaine', 0, '', $conf->entity);
         }
     }
 }
@@ -132,13 +133,13 @@ function factymxTestConnection(string $env, array &$messages): void
         $messages[] = array(
             'level' => 'errors',
             'text'  => 'Esta llave pertenece a un ambiente de '
-                .($actual === 'production' ? 'PRODUCCIÓN' : 'PRUEBAS')
-                .' (modo de timbrado: '.$actual.'), pero la estás guardando en el campo de '
-                .FactyConfig::label($env).'. '
-                .($expected === 'sandbox'
+                . ($actual === 'production' ? 'PRODUCCIÓN' : 'PRUEBAS')
+                . ' (modo de timbrado: ' . $actual . '), pero la estás guardando en el campo de '
+                . FactyConfig::label($env) . '. '
+                . ($expected === 'sandbox'
                     ? 'Timbrarías CFDI reales creyendo que estás probando.'
                     : 'Tus facturas de producción no tendrían validez fiscal.')
-                .' No se guardó la organización: revisa la llave o cambia el ambiente.',
+                . ' No se guardó la organización: revisa la llave o cambia el ambiente.',
         );
 
         return;
@@ -150,11 +151,11 @@ function factymxTestConnection(string $env, array &$messages): void
         $messages[] = array(
             'level' => 'warnings',
             'text'  => 'Facty no reportó el modo de timbrado, así que no se pudo verificar que la llave corresponda al ambiente '
-                .FactyConfig::label($env).'. Verifica manualmente antes de timbrar en producción.',
+                . FactyConfig::label($env) . '. Verifica manualmente antes de timbrar en producción.',
         );
     }
 
-    dolibarr_set_const($db, 'FACTYMX_ORG_SLUG_'.FactyConfig::suffix($env), $slug, 'chaine', 0, '', $conf->entity);
+    dolibarr_set_const($db, 'FACTYMX_ORG_SLUG_' . FactyConfig::suffix($env), $slug, 'chaine', 0, '', $conf->entity);
 
     $org      = isset($ctx['org']['name']) ? (string) $ctx['org']['name'] : $slug;
     $fiscal   = isset($ctx['fiscal']) && is_array($ctx['fiscal']) ? $ctx['fiscal'] : array();
@@ -166,11 +167,11 @@ function factymxTestConnection(string $env, array &$messages): void
         ? (string) $ctx['timbreBalance']
         : 'sin permiso para consultarlo';
 
-    $text = 'Conectado a '.FactyConfig::label($env).' — '.dol_escape_htmltag($org).' ('.dol_escape_htmltag($rfc).')'
-        .'<br>Régimen '.dol_escape_htmltag($regimen).' · Lugar de expedición '.dol_escape_htmltag($lugar)
-        .' · CSD: '.dol_escape_htmltag($csdState)
-        .'<br>Modo de timbrado: <strong>'.dol_escape_htmltag($actual !== '' ? $actual : 'no reportado').'</strong>'
-        .'<br>Timbres disponibles: '.dol_escape_htmltag($saldo);
+    $text = 'Conectado a ' . FactyConfig::label($env) . ' — ' . dol_escape_htmltag($org) . ' (' . dol_escape_htmltag($rfc) . ')'
+        . '<br>Régimen ' . dol_escape_htmltag($regimen) . ' · Lugar de expedición ' . dol_escape_htmltag($lugar)
+        . ' · CSD: ' . dol_escape_htmltag($csdState)
+        . '<br>Modo de timbrado: <strong>' . dol_escape_htmltag($actual !== '' ? $actual : 'no reportado') . '</strong>'
+        . '<br>Timbres disponibles: ' . dol_escape_htmltag($saldo);
 
     if ($csdState !== 'active') {
         $text .= '<br><strong>Ojo:</strong> sin un CSD vigente en Facty no vas a poder timbrar.';
@@ -186,7 +187,7 @@ function factymxTestConnection(string $env, array &$messages): void
             }
         }
         if ($off) {
-            $text .= '<br>No disponibles en esta cuenta: '.dol_escape_htmltag(implode(', ', $off));
+            $text .= '<br>No disponibles en esta cuenta: ' . dol_escape_htmltag(implode(', ', $off));
         }
     }
 
@@ -232,24 +233,24 @@ foreach ($messages as $m) {
 print factymxEnvBanner();
 
 print '<span class="opacitymedium">'
-    .'Facty guarda el certificado (CSD) y timbra ante el SAT. Este módulo sólo manda los datos '
-    .'de la factura: aquí no se almacena ningún certificado ni contraseña del PAC.'
-    .'</span><br><br>';
+    . 'Facty guarda el certificado (CSD) y timbra ante el SAT. Este módulo sólo manda los datos '
+    . 'de la factura: aquí no se almacena ningún certificado ni contraseña del PAC.'
+    . '</span><br><br>';
 
-print '<form method="POST" action="'.$_SERVER['PHP_SELF'].'">';
-print '<input type="hidden" name="token" value="'.newToken().'">';
+print '<form method="POST" action="' . $_SERVER['PHP_SELF'] . '">';
+print '<input type="hidden" name="token" value="' . newToken() . '">';
 print '<input type="hidden" name="action" value="save">';
 
 // --- Ambiente activo
 print '<table class="noborder centpercent"><tr class="liste_titre"><td colspan="2">Ambiente activo</td></tr>';
 print '<tr class="oddeven"><td class="titlefield">¿Contra qué ambiente se timbra?</td><td>';
 $current = FactyConfig::env();
-print '<label><input type="radio" name="active_env" value="test"'.($current === FactyConfig::ENV_TEST ? ' checked' : '').'> '
-    .'<strong>Pruebas</strong> — comprobantes sin validez fiscal</label><br>';
-print '<label><input type="radio" name="active_env" value="prod"'.($current === FactyConfig::ENV_PROD ? ' checked' : '').'> '
-    .'<strong>Producción</strong> — CFDI reales ante el SAT</label>';
+print '<label><input type="radio" name="active_env" value="test"' . ($current === FactyConfig::ENV_TEST ? ' checked' : '') . '> '
+    . '<strong>Pruebas</strong> — comprobantes sin validez fiscal</label><br>';
+print '<label><input type="radio" name="active_env" value="prod"' . ($current === FactyConfig::ENV_PROD ? ' checked' : '') . '> '
+    . '<strong>Producción</strong> — CFDI reales ante el SAT</label>';
 print '<br><span class="opacitymedium">Los dos ambientes se configuran por separado y se conservan. '
-    .'Son organizaciones distintas en Facty, así que cada uno necesita su propia llave.</span>';
+    . 'Son organizaciones distintas en Facty, así que cada uno necesita su propia llave.</span>';
 print '</td></tr></table><br>';
 
 // --- Un bloque por ambiente
@@ -259,33 +260,33 @@ foreach (array(FactyConfig::ENV_TEST, FactyConfig::ENV_PROD) as $e) {
     $slug      = FactyConfig::orgSlug($e);
 
     print '<table class="noborder centpercent"><tr class="liste_titre"><td colspan="2">'
-        .FactyConfig::label($e).'</td></tr>';
+        . FactyConfig::label($e) . '</td></tr>';
 
     print '<tr class="oddeven"><td class="titlefield">URL de Facty</td><td>';
-    print '<input type="url" class="minwidth300" name="api_base_'.$suffix.'" value="'
-        .dol_escape_htmltag(FactyConfig::baseUrl($e)).'">';
+    print '<input type="url" class="minwidth300" name="api_base_' . $suffix . '" value="'
+        . dol_escape_htmltag(FactyConfig::baseUrl($e)) . '">';
     print '</td></tr>';
 
     print '<tr class="oddeven"><td>API key</td><td>';
-    print '<input type="password" class="minwidth300" name="api_key_'.$suffix.'" value="" autocomplete="new-password" placeholder="fk_…">';
+    print '<input type="password" class="minwidth300" name="api_key_' . $suffix . '" value="" autocomplete="new-password" placeholder="fk_…">';
     if ($storedKey !== '') {
-        print ' <span class="opacitymedium">Guardada: '.dol_escape_htmltag(FactyConfig::mask($storedKey)).'</span>';
+        print ' <span class="opacitymedium">Guardada: ' . dol_escape_htmltag(FactyConfig::mask($storedKey)) . '</span>';
     } else {
         print ' <span class="warning">Sin configurar</span>';
     }
     print '<br><span class="opacitymedium">Se guarda cifrada y no se vuelve a mostrar. '
-        .'Déjalo vacío para conservar la actual. Créala en Facty → Configuración → API Keys.</span>';
+        . 'Déjalo vacío para conservar la actual. Créala en Facty → Configuración → API Keys.</span>';
     print '</td></tr>';
 
     print '<tr class="oddeven"><td>Organización</td><td>';
     print $slug !== ''
-        ? dol_escape_htmltag($slug).' <span class="opacitymedium">(detectada automáticamente)</span>'
+        ? dol_escape_htmltag($slug) . ' <span class="opacitymedium">(detectada automáticamente)</span>'
         : '<span class="opacitymedium">Se detecta al probar la conexión — no hace falta escribirla.</span>';
     print '</td></tr>';
 
     print '<tr class="oddeven"><td></td><td>';
-    print '<a class="button button-save" href="'.$_SERVER['PHP_SELF'].'?action=test&env='.$e.'&token='.newToken().'">'
-        .'Probar conexión ('.FactyConfig::label($e).')</a>';
+    print '<a class="button button-save" href="' . $_SERVER['PHP_SELF'] . '?action=test&env=' . $e . '&token=' . newToken() . '">'
+        . 'Probar conexión (' . FactyConfig::label($e) . ')</a>';
     print '</td></tr>';
 
     print '</table><br>';
@@ -293,7 +294,7 @@ foreach (array(FactyConfig::ENV_TEST, FactyConfig::ENV_PROD) as $e) {
 
 print '<table class="noborder centpercent"><tr class="liste_titre"><td colspan="2">Avanzado</td></tr>';
 print '<tr class="oddeven"><td class="titlefield">Timeout (segundos)</td><td>';
-print '<input type="number" min="5" max="120" name="timeout" value="'.FactyConfig::timeout().'">';
+print '<input type="number" min="5" max="120" name="timeout" value="' . FactyConfig::timeout() . '">';
 print '</td></tr></table>';
 
 print '<div class="center"><br><input type="submit" class="button" value="Guardar"></div>';

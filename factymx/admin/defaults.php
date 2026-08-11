@@ -1,4 +1,5 @@
 <?php
+
 /* Copyright (C) 2026 Facty — GPLv3, see LICENSE. */
 
 /**
@@ -27,9 +28,9 @@ if (!$res) {
     die('Include of main fails');
 }
 
-require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
-require_once __DIR__.'/../lib/factymx.lib.php';
-require_once __DIR__.'/../class/FactyConfig.class.php';
+require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
+require_once __DIR__ . '/../lib/factymx.lib.php';
+require_once __DIR__ . '/../class/FactyConfig.class.php';
 
 global $db, $langs, $user, $conf;
 
@@ -54,7 +55,7 @@ if ($action === 'save' && $user->hasRight('factymx', 'config', 'write')) {
             $clave = preg_replace('/[^0-9]/', '', (string) $claveSat);
             dolibarr_set_const(
                 $db,
-                'FACTYMX_FORMAPAGO_'.strtoupper(dol_sanitizeFileName((string) $codePaiement)),
+                'FACTYMX_FORMAPAGO_' . strtoupper(dol_sanitizeFileName((string) $codePaiement)),
                 $clave,
                 'chaine',
                 0,
@@ -71,7 +72,7 @@ if ($action === 'save' && $user->hasRight('factymx', 'config', 'write')) {
         foreach ($cuentas as $bankId => $factyAccountId) {
             dolibarr_set_const(
                 $db,
-                'FACTYMX_ACCOUNT_'.FactyConfig::suffix($env).'_'.((int) $bankId),
+                'FACTYMX_ACCOUNT_' . FactyConfig::suffix($env) . '_' . ((int) $bankId),
                 trim((string) $factyAccountId),
                 'chaine',
                 0,
@@ -89,8 +90,8 @@ print load_fiche_titre('Facty — Configuración', '', 'factymx@factymx');
 print dol_get_fiche_head(factymxAdminPrepareHead(), 'defaults', 'Facty', -1, 'factymx@factymx');
 print factymxEnvBanner();
 
-print '<form method="POST" action="'.$_SERVER['PHP_SELF'].'">';
-print '<input type="hidden" name="token" value="'.newToken().'">';
+print '<form method="POST" action="' . $_SERVER['PHP_SELF'] . '">';
+print '<input type="hidden" name="token" value="' . newToken() . '">';
 print '<input type="hidden" name="action" value="save">';
 
 // --- Valores del comprobante
@@ -98,21 +99,21 @@ print '<table class="noborder centpercent"><tr class="liste_titre"><td colspan="
 
 print '<tr class="oddeven"><td class="titlefield">Serie</td><td>';
 print '<input type="text" name="serie" maxlength="25" value="'
-    .dol_escape_htmltag(getDolGlobalString('FACTYMX_DEFAULT_SERIE')).'">';
+    . dol_escape_htmltag(getDolGlobalString('FACTYMX_DEFAULT_SERIE')) . '">';
 print ' <span class="opacitymedium">Si se deja vacío, Facty usa la serie configurada en la organización.</span>';
 print '</td></tr>';
 
 print '<tr class="oddeven"><td>Uso de CFDI por omisión</td><td>';
 print '<input type="text" name="usocfdi" maxlength="4" value="'
-    .dol_escape_htmltag(getDolGlobalString('FACTYMX_DEFAULT_USOCFDI')).'">';
+    . dol_escape_htmltag(getDolGlobalString('FACTYMX_DEFAULT_USOCFDI')) . '">';
 print ' <span class="opacitymedium">Clave del catálogo c_UsoCFDI (por ejemplo G03). Se puede cambiar factura por factura.</span>';
 print '</td></tr>';
 
 print '<tr class="oddeven"><td>Método de pago</td><td>';
 $metodo = getDolGlobalString('FACTYMX_DEFAULT_METODOPAGO') === 'PPD' ? 'PPD' : 'PUE';
 print '<select name="metodopago">';
-print '<option value="PUE"'.($metodo === 'PUE' ? ' selected' : '').'>PUE — Pago en una sola exhibición</option>';
-print '<option value="PPD"'.($metodo === 'PPD' ? ' selected' : '').'>PPD — Pago en parcialidades o diferido</option>';
+print '<option value="PUE"' . ($metodo === 'PUE' ? ' selected' : '') . '>PUE — Pago en una sola exhibición</option>';
+print '<option value="PPD"' . ($metodo === 'PPD' ? ' selected' : '') . '>PPD — Pago en parcialidades o diferido</option>';
 print '</select>';
 print ' <span class="opacitymedium">Con PPD, el SAT obliga a emitir después un complemento de pago por cada abono.</span>';
 print '</td></tr>';
@@ -120,19 +121,19 @@ print '</table><br>';
 
 // --- Formas de pago
 print '<table class="noborder centpercent"><tr class="liste_titre">'
-    .'<td colspan="2">Formas de pago: Dolibarr → SAT (c_FormaPago)</td></tr>';
+    . '<td colspan="2">Formas de pago: Dolibarr → SAT (c_FormaPago)</td></tr>';
 
-$sql = 'SELECT id, code, libelle FROM '.MAIN_DB_PREFIX.'c_paiement WHERE active = 1 ORDER BY code';
+$sql = 'SELECT id, code, libelle FROM ' . MAIN_DB_PREFIX . 'c_paiement WHERE active = 1 ORDER BY code';
 $resq = $db->query($sql);
 if ($resq) {
     while ($row = $db->fetch_object($resq)) {
-        $const = 'FACTYMX_FORMAPAGO_'.strtoupper(dol_sanitizeFileName((string) $row->code));
+        $const = 'FACTYMX_FORMAPAGO_' . strtoupper(dol_sanitizeFileName((string) $row->code));
         $val   = getDolGlobalString($const);
 
         print '<tr class="oddeven"><td class="titlefield">'
-            .dol_escape_htmltag($row->libelle.' ('.$row->code.')').'</td><td>';
-        print '<input type="text" name="forma['.dol_escape_htmltag((string) $row->code).']" '
-            .'maxlength="2" size="4" value="'.dol_escape_htmltag($val).'" placeholder="03">';
+            . dol_escape_htmltag($row->libelle . ' (' . $row->code . ')') . '</td><td>';
+        print '<input type="text" name="forma[' . dol_escape_htmltag((string) $row->code) . ']" '
+            . 'maxlength="2" size="4" value="' . dol_escape_htmltag($val) . '" placeholder="03">';
         if ($val === '') {
             // Se avisa aquí y no al momento de timbrar: descubrir un mapeo
             // faltante con la factura ya validada es una interrupción cara.
@@ -144,23 +145,23 @@ if ($resq) {
 }
 print '</table>';
 print '<span class="opacitymedium">Claves frecuentes: 01 efectivo · 02 cheque · 03 transferencia · 04 tarjeta de crédito · '
-    .'28 tarjeta de débito · 99 por definir (obligatoria en facturas PPD).</span><br><br>';
+    . '28 tarjeta de débito · 99 por definir (obligatoria en facturas PPD).</span><br><br>';
 
 // --- Cuentas bancarias
 print '<table class="noborder centpercent"><tr class="liste_titre">'
-    .'<td colspan="2">Cuentas bancarias → Facty ('.FactyConfig::label($env).')</td></tr>';
+    . '<td colspan="2">Cuentas bancarias → Facty (' . FactyConfig::label($env) . ')</td></tr>';
 
-$sql = 'SELECT rowid, label, number FROM '.MAIN_DB_PREFIX.'bank_account
-        WHERE entity = '.((int) $conf->entity).' AND clos = 0 ORDER BY label';
+$sql = 'SELECT rowid, label, number FROM ' . MAIN_DB_PREFIX . 'bank_account
+        WHERE entity = ' . ((int) $conf->entity) . ' AND clos = 0 ORDER BY label';
 $resq = $db->query($sql);
 $nacc = 0;
 if ($resq) {
     while ($row = $db->fetch_object($resq)) {
         $nacc++;
-        $const = 'FACTYMX_ACCOUNT_'.FactyConfig::suffix($env).'_'.((int) $row->rowid);
-        print '<tr class="oddeven"><td class="titlefield">'.dol_escape_htmltag($row->label).'</td><td>';
-        print '<input type="text" class="minwidth200" name="cuenta['.((int) $row->rowid).']" value="'
-            .dol_escape_htmltag(getDolGlobalString($const)).'" placeholder="id de la cuenta en Facty">';
+        $const = 'FACTYMX_ACCOUNT_' . FactyConfig::suffix($env) . '_' . ((int) $row->rowid);
+        print '<tr class="oddeven"><td class="titlefield">' . dol_escape_htmltag($row->label) . '</td><td>';
+        print '<input type="text" class="minwidth200" name="cuenta[' . ((int) $row->rowid) . ']" value="'
+            . dol_escape_htmltag(getDolGlobalString($const)) . '" placeholder="id de la cuenta en Facty">';
         print '</td></tr>';
     }
     $db->free($resq);
@@ -170,7 +171,7 @@ if ($nacc === 0) {
 }
 print '</table>';
 print '<span class="opacitymedium">El complemento de pago exige decir a qué cuenta entró el dinero. '
-    .'Este mapeo es por ambiente: el identificador de Facty en pruebas no existe en producción.</span>';
+    . 'Este mapeo es por ambiente: el identificador de Facty en pruebas no existe en producción.</span>';
 
 print '<div class="center"><br><input type="submit" class="button" value="Guardar"></div>';
 print '</form>';
