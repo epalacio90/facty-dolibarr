@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: php ${{ matrix.php }} — syntax
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.1 es el mínimo declarado por el módulo; 8.3 es lo que corre la
+        # mayoría de instalaciones de Dolibarr 18+ hoy.
+        php: ['8.1', '8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Comprobar sintaxis de todo el árbol
+        run: |
+          set -euo pipefail
+          # -print0/xargs -0: hay rutas con espacios y un fallo debe tumbar el job.
+          find . -name '*.php' -not -path './.git/*' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+  codestyle:
+    name: PSR-12
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: phpcs
+      - name: PHP_CodeSniffer (PSR-12)
+        run: phpcs --standard=phpcs.xml --report=full
+
+  guards:
+    name: guardas del módulo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # El módulo no debe guardar jamás un certificado ni una contraseña de PAC:
+      # esa es la premisa de todo el diseño. Si alguien introduce esas rutas,
+      # el proyecto cambió de forma y merece una discusión, no un commit.
+      - name: Sin CSD ni credenciales de PAC en el módulo
+        run: |
+          set -euo pipefail
+          if grep -rniE '\.cer|\.key|csd_password|pac_password|certificado_p12' \
+               --include='*.php' factymx/; then
+            echo "::error::El módulo no debe manejar certificados ni contraseñas del PAC."
+            exit 1
+          fi
+
+      # Un NUL en un fuente lo vuelve binario para git y rompe los diffs y los
+      # merges — ya pasó una vez en el backend y costó caro encontrarlo.
+      - name: Sin bytes NUL en los fuentes
+        run: |
+          set -euo pipefail
+          if grep -rlP '\x00' --include='*.php' --include='*.sql' --include='*.css' . ; then
+            echo "::error::Hay un byte NUL en un archivo de texto."
+            exit 1
+          fi
+
+      # Verificación de TLS: la llave viaja en cada petición.
+      - name: TLS siempre verificado
+        run: |
+          set -euo pipefail
+          if grep -rnE 'CURLOPT_SSL_VERIFY(PEER|HOST)\s*=>\s*(false|0)' --include='*.php' .; then
+            echo "::error::No se permite desactivar la verificación de TLS."
+            exit 1
+          fi

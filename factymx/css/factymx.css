@@ -1,0 +1,70 @@
+/* Copyright (C) 2026 Facty — GPLv3, see LICENSE. */
+
+/*
+ * Banda de MODO PRUEBAS.
+ *
+ * Deliberadamente difícil de ignorar y difícil de confundir con el resto de la
+ * interfaz de Dolibarr. El riesgo que cubre no es estético: con dos ambientes
+ * configurados a la vez, alguien va a mirar un comprobante de sandbox creyendo
+ * que es real — o peor, va a timbrar en producción creyendo que prueba.
+ */
+.factymx-env-banner {
+    background: repeating-linear-gradient(
+        45deg,
+        #fff4e5,
+        #fff4e5 12px,
+        #ffe9cc 12px,
+        #ffe9cc 24px
+    );
+    border: 1px solid #e8a33d;
+    border-left: 6px solid #e8a33d;
+    color: #6b4708;
+    padding: 10px 14px;
+    margin: 0 0 12px 0;
+    border-radius: 4px;
+    font-size: 0.95em;
+    line-height: 1.5;
+}
+
+.factymx-env-banner strong {
+    letter-spacing: 0.04em;
+}
+
+.factymx-env-banner a {
+    color: #6b4708;
+    text-decoration: underline;
+}
+
+/* Distintivo por fila: marca el ambiente en el que se timbró el documento,
+   que no es necesariamente el ambiente activo ahora. */
+.factymx-badge-test {
+    background-color: #e8a33d;
+    color: #3d2800;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+/* Estados del CFDI en las listas. */
+.factymx-status-stamped   { color: #1b7f3b; font-weight: 600; }
+.factymx-status-pending   { color: #8a6d1f; font-weight: 600; }
+.factymx-status-failed    { color: #b3261e; font-weight: 600; }
+.factymx-status-cancelled { color: #6b6b6b; text-decoration: line-through; }
+
+/* El request id de Facty se muestra junto a los errores para que un ticket de
+   soporte llegue con una referencia que se pueda buscar del otro lado. */
+.factymx-request-id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    color: #6b6b6b;
+    user-select: all;
+}
+
+@media (prefers-color-scheme: dark) {
+    .factymx-env-banner {
+        background: #3a2c12;
+        border-color: #b9812c;
+        border-left-color: #b9812c;
+        color: #f4dcae;
+    }
+    .factymx-env-banner a { color: #f4dcae; }
+}

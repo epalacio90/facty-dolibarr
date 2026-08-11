@@ -140,14 +140,14 @@ class modFactyMX extends DolibarrModules
         $r++;
 
         // ---------------------------------------------------------------
-        // Pestañas inyectadas en objetos de Dolibarr.
+        // Pestañas y menús.
+        //
+        // Aquí sólo se declara lo que EXISTE. Las pestañas de factura, pago,
+        // tercero y producto, y las listas de CFDI, llegan en las sub-fases D–H;
+        // declararlas antes de tiempo dejaría al usuario con enlaces que llevan
+        // a un 404, que es peor que no ofrecerlas todavía.
         // ---------------------------------------------------------------
-        $this->tabs = array(
-            'invoice:+factymx:CFDI:factymx@factymx:$user->hasRight(\'factymx\',\'cfdi\',\'read\'):/factymx/facture/cfdi.php?facid=__ID__',
-            'payment:+factymxrep:Complemento de Pago:factymx@factymx:$user->hasRight(\'factymx\',\'rep\',\'create\'):/factymx/paiement/rep.php?id=__ID__',
-            'thirdparty:+factymxfiscal:Datos fiscales CFDI:factymx@factymx:$user->hasRight(\'factymx\',\'cfdi\',\'read\'):/factymx/societe/fiscal.php?socid=__ID__',
-            'product:+factymxsat:Datos SAT:factymx@factymx:$user->hasRight(\'factymx\',\'cfdi\',\'read\'):/factymx/product/sat.php?id=__ID__',
-        );
+        $this->tabs = array();
 
         $this->menu = array();
         $r = 0;
@@ -164,36 +164,6 @@ class modFactyMX extends DolibarrModules
             'position' => 1000 + $r,
             'enabled'  => '$conf->factymx->enabled',
             'perms'    => '$user->hasRight("factymx", "cfdi", "read")',
-            'target'   => '',
-            'user'     => 2,
-        );
-
-        $this->menu[$r++] = array(
-            'fk_menu'  => 'fk_mainmenu=factymx',
-            'type'     => 'left',
-            'titre'    => 'Facturas CFDI',
-            'mainmenu' => 'factymx',
-            'leftmenu' => 'factymx_facturas',
-            'url'      => '/factymx/consultas/facturas.php',
-            'langs'    => 'factymx',
-            'position' => 1000 + $r,
-            'enabled'  => '$conf->factymx->enabled',
-            'perms'    => '$user->hasRight("factymx", "cfdi", "read")',
-            'target'   => '',
-            'user'     => 2,
-        );
-
-        $this->menu[$r++] = array(
-            'fk_menu'  => 'fk_mainmenu=factymx',
-            'type'     => 'left',
-            'titre'    => 'Complementos de pago',
-            'mainmenu' => 'factymx',
-            'leftmenu' => 'factymx_pagos',
-            'url'      => '/factymx/consultas/pagos.php',
-            'langs'    => 'factymx',
-            'position' => 1000 + $r,
-            'enabled'  => '$conf->factymx->enabled',
-            'perms'    => '$user->hasRight("factymx", "rep", "create")',
             'target'   => '',
             'user'     => 2,
         );

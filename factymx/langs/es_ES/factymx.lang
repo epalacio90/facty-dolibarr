@@ -1,0 +1,37 @@
+# Copyright (C) 2026 Facty — GPLv3, see LICENSE.
+# Módulo Facty — español (México).
+
+ModuleFactyMXName = Facty
+ModuleFactyMXDesc = Timbrado de CFDI 4.0 con Facty: facturas, notas de crédito y complementos de pago.
+
+FactyMXSetup = Configuración de Facty
+FactyMXConnection = Conexión
+FactyMXDefaults = Valores por omisión
+FactyMXDiagnostics = Diagnóstico
+
+FactyMXEnv = Ambiente
+FactyMXEnvProd = Producción
+FactyMXEnvTest = Pruebas
+FactyMXEnvBannerTitle = MODO PRUEBAS
+FactyMXEnvBannerBody = Los comprobantes que emitas aquí no tienen validez fiscal.
+FactyMXTestConnection = Probar conexión
+
+FactyMXApiKey = API key
+FactyMXApiKeyHelp = Se guarda cifrada y no se vuelve a mostrar. Créala en Facty → Configuración → API Keys.
+FactyMXApiBase = URL de Facty
+FactyMXOrg = Organización
+FactyMXOrgAuto = Se detecta al probar la conexión.
+
+FactyMXStamp = Timbrar
+FactyMXStamped = Timbrado
+FactyMXPending = En proceso
+FactyMXFailed = Falló
+FactyMXCancelled = Cancelado
+FactyMXUuid = Folio fiscal (UUID)
+FactyMXStampedAt = Fecha de timbrado
+
+# Errores. Se prefiere decir qué hacer, no sólo qué pasó.
+FactyMXErrNoKey = Falta la API key de Facty para este ambiente. Configúrala en Inicio → Configuración → Módulos → Facty.
+FactyMXErrNoConnection = No se pudo contactar a Facty. El resultado es desconocido: la petición pudo haber llegado, así que no se reintentará automáticamente sin verificar antes.
+FactyMXErrNoTimbres = No hay timbres disponibles en Facty. Recarga tu saldo para continuar.
+FactyMXErrEnvMismatch = La llave no corresponde al ambiente seleccionado. Revisa la configuración antes de timbrar.
