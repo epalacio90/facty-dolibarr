@@ -30,6 +30,11 @@ function factymxAdminPrepareHead()
     $head[$h][2] = 'defaults';
     $h++;
 
+    $head[$h][0] = dol_buildpath('/factymx/admin/preflight.php', 1);
+    $head[$h][1] = 'Qué falta';
+    $head[$h][2] = 'preflight';
+    $h++;
+
     $head[$h][0] = dol_buildpath('/factymx/admin/diagnostics.php', 1);
     $head[$h][1] = 'Diagnóstico';
     $head[$h][2] = 'diagnostics';

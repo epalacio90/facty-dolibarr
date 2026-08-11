@@ -143,12 +143,17 @@ class modFactyMX extends DolibarrModules
         // ---------------------------------------------------------------
         // Pestañas y menús.
         //
-        // Aquí sólo se declara lo que EXISTE. Las pestañas de factura, pago,
-        // tercero y producto, y las listas de CFDI, llegan en las sub-fases D–H;
-        // declararlas antes de tiempo dejaría al usuario con enlaces que llevan
-        // a un 404, que es peor que no ofrecerlas todavía.
+        // Aquí sólo se declara lo que EXISTE. Las pestañas de factura y de pago,
+        // y las listas de CFDI, llegan en las sub-fases D–H; declararlas antes
+        // de tiempo dejaría al usuario con enlaces que llevan a un 404, que es
+        // peor que no ofrecerlas todavía.
         // ---------------------------------------------------------------
-        $this->tabs = array();
+        $this->tabs = array(
+            'thirdparty:+factymxfiscal:Datos fiscales CFDI:factymx@factymx:'
+                . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/societe/fiscal.php?socid=__ID__',
+            'product:+factymxsat:Datos SAT:factymx@factymx:'
+                . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/product/sat.php?id=__ID__',
+        );
 
         $this->menu = array();
         $r = 0;
@@ -215,16 +220,58 @@ class modFactyMX extends DolibarrModules
             return -1;
         }
 
-        // Los extrafields se crean en la sub-fase C. Van con prefijo
-        // `factymx_` a propósito: otro módulo de facturación puede tener ya
-        // sus propios extrafields con los nombres obvios (claveprodserv,
-        // umed, usocfdi…) sobre las mismas tablas, y su instalador MODIFICA
-        // definiciones que no creó. Compartir nombres corrompería la
-        // configuración de cualquiera de los dos (R-16.3).
+        $this->createExtrafields();
 
         $sql = array();
 
         return $this->_init($sql, $options);
+    }
+
+    /**
+     * Crea los extrafields, de forma idempotente.
+     *
+     * **Todos llevan el prefijo `factymx_` a propósito.** Otro módulo de
+     * facturación puede tener ya sus propios extrafields con los nombres obvios
+     * (claveprodserv, umed, usocfdi…) sobre estas mismas tablas, y su instalador
+     * MODIFICA definiciones que no creó. Compartir nombres corrompería la
+     * configuración de cualquiera de los dos, justo en las instalaciones que más
+     * interesa convertir: las que ya facturan con otra cosa.
+     *
+     * Los campos son de texto, no listas ligadas a una tabla: el catálogo vive
+     * en la caché local, que está acotada por ambiente, y el filtro estático de
+     * una lista ligada no puede expresar "sólo el ambiente activo". Los
+     * selectores buenos están en las pestañas del módulo; aquí sólo se define el
+     * almacenamiento.
+     */
+    private function createExtrafields(): void
+    {
+        global $db, $conf, $langs;
+
+        require_once DOL_DOCUMENT_ROOT . '/core/class/extrafields.class.php';
+
+        $extra = new ExtraFields($db);
+
+        // Producto: lo que el SAT exige por concepto.
+        $extra->addExtraField('factymx_claveprodserv', 'Clave producto/servicio (SAT)', 'varchar', 100, 20, 'product', 0, 0, '', '', 1, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+        $extra->addExtraField('factymx_claveunidad', 'Clave de unidad (SAT)', 'varchar', 101, 5, 'product', 0, 0, '', '', 1, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+        $extra->addExtraField('factymx_noidentificacion', 'No. de identificación', 'varchar', 102, 100, 'product', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+        $extra->addExtraField('factymx_objetoimp', 'Objeto de impuesto', 'varchar', 103, 2, 'product', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+
+        // Línea de factura: los mismos campos, como excepción por concepto.
+        // Una línea puede diferir de su producto, y las líneas de texto libre
+        // (sin producto de catálogo) necesitan sus propias claves.
+        $extra->addExtraField('factymx_claveprodserv', 'Clave producto/servicio (SAT)', 'varchar', 100, 20, 'facturedet', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+        $extra->addExtraField('factymx_claveunidad', 'Clave de unidad (SAT)', 'varchar', 101, 5, 'facturedet', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+        $extra->addExtraField('factymx_objetoimp', 'Objeto de impuesto', 'varchar', 102, 2, 'facturedet', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+
+        // Factura: datos del comprobante.
+        $extra->addExtraField('factymx_usocfdi', 'Uso del CFDI', 'varchar', 100, 4, 'facture', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+        $extra->addExtraField('factymx_metodopago', 'Método de pago (PUE/PPD)', 'varchar', 101, 3, 'facture', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+        $extra->addExtraField('factymx_exportacion', 'Exportación', 'varchar', 102, 2, 'facture', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+
+        // Tercero: datos fiscales del receptor.
+        $extra->addExtraField('factymx_regimenfiscal', 'Régimen fiscal', 'varchar', 100, 4, 'societe', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
+        $extra->addExtraField('factymx_usocfdi', 'Uso del CFDI por omisión', 'varchar', 101, 4, 'societe', 0, 0, '', '', 0, '', 0, 0, '', '', 'factymx@factymx', '$conf->factymx->enabled');
     }
 
     /**
