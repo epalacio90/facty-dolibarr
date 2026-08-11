@@ -32,6 +32,8 @@ require_once __DIR__ . '/../class/FactyConfig.class.php';
 require_once __DIR__ . '/../class/FactyCatalog.class.php';
 require_once __DIR__ . '/../class/FactyCfdi.class.php';
 require_once __DIR__ . '/../class/FactyStamp.class.php';
+require_once __DIR__ . '/../class/FactyCancel.class.php';
+require_once __DIR__ . '/../class/FactyArtifacts.class.php';
 
 global $db, $langs, $user, $conf;
 
@@ -80,6 +82,22 @@ if ($action === 'stamp' && $user->hasRight('factymx', 'cfdi', 'create')) {
     $result = $stamp->stamp($object, $opts);
     if ($result !== null) {
         setEventMessages('CFDI timbrado. Folio fiscal: ' . dol_escape_htmltag((string) $result->uuid), null, 'mesgs');
+
+        // El XML y el PDF se bajan de una vez: el usuario acaba de emitir un
+        // comprobante fiscal y lo siguiente que va a querer es mandárselo a su
+        // cliente. Si la descarga falla no se deshace nada — el CFDI ya existe
+        // y los archivos se pueden volver a pedir con el botón.
+        try {
+            $artifacts = new FactyArtifacts($db);
+            $artifacts->fetchForInvoice($object, $result);
+        } catch (Exception $e) {
+            setEventMessages(
+                'El CFDI se timbró correctamente, pero no se pudieron descargar los archivos: '
+                . $e->getMessage() . ' Puedes intentarlo con el botón "Descargar de Facty".',
+                null,
+                'warnings'
+            );
+        }
     } else {
         if ($stamp->problems) {
             setEventMessages('No se pudo timbrar:', $stamp->problems, 'errors');
@@ -87,6 +105,51 @@ if ($action === 'stamp' && $user->hasRight('factymx', 'cfdi', 'create')) {
         if ($stamp->error !== '') {
             setEventMessages($stamp->error, null, 'errors');
         }
+    }
+    $cfdi = FactyCfdi::fetchByFacture($db, (int) $object->id);
+}
+
+$satStatus = null;
+
+if ($action === 'fetchfiles' && $cfdi !== null && $user->hasRight('factymx', 'cfdi', 'read')) {
+    try {
+        $artifacts = new FactyArtifacts($db);
+        $artifacts->fetchForInvoice($object, $cfdi, true);
+        if ($cfdi->status === FactyCfdi::STATUS_CANCELLED) {
+            $artifacts->fetchAcuse($object, $cfdi, true);
+        }
+        setEventMessages('Archivos descargados de Facty.', null, 'mesgs');
+    } catch (FactyApiException $e) {
+        setEventMessages($e->userMessage(), null, 'errors');
+    } catch (Exception $e) {
+        setEventMessages($e->getMessage(), null, 'errors');
+    }
+    $cfdi = FactyCfdi::fetchByFacture($db, (int) $object->id);
+}
+
+if ($action === 'satstatus' && $cfdi !== null && $user->hasRight('factymx', 'cfdi', 'read')) {
+    // `force` sólo cuando el usuario lo pide expresamente: cada consulta
+    // reenviada al PAC consume un folio de la cuenta.
+    $cancelHelper = new FactyCancel($db);
+    $satStatus    = $cancelHelper->satStatus($cfdi, true);
+    if ($satStatus === null && $cancelHelper->error !== '') {
+        setEventMessages($cancelHelper->error, null, 'errors');
+    }
+}
+
+if ($action === 'cancel' && $cfdi !== null && $user->hasRight('factymx', 'cfdi', 'cancel')) {
+    $cancelHelper = new FactyCancel($db);
+    $ok = $cancelHelper->cancel(
+        $object,
+        $cfdi,
+        (string) GETPOST('motivo', 'alpha'),
+        (string) GETPOST('folio_sustitucion', 'alpha')
+    );
+
+    if ($ok) {
+        setEventMessages('CFDI cancelado ante el SAT.', null, 'mesgs');
+    } else {
+        setEventMessages($cancelHelper->error, null, 'errors');
     }
     $cfdi = FactyCfdi::fetchByFacture($db, (int) $object->id);
 }
@@ -101,20 +164,103 @@ print '<div class="fichecenter">';
 print factymxEnvBanner();
 
 // ---------------------------------------------------------------- timbrado
-if ($cfdi !== null && $cfdi->status === FactyCfdi::STATUS_STAMPED) {
+if ($cfdi !== null && in_array($cfdi->status, array(FactyCfdi::STATUS_STAMPED, FactyCfdi::STATUS_CANCELLED), true)) {
+    $cancelado = ($cfdi->status === FactyCfdi::STATUS_CANCELLED);
+
     print '<table class="border centpercent">';
-    print '<tr><td class="titlefield">Estado</td><td><span class="factymx-status-stamped">Timbrado</span> '
-        . factymxEnvBadge($cfdi->env) . '</td></tr>';
+    print '<tr><td class="titlefield">Estado</td><td>';
+    print $cancelado
+        ? '<span class="factymx-status-cancelled">Cancelado</span>'
+        : '<span class="factymx-status-stamped">Timbrado</span>';
+    print ' ' . factymxEnvBadge($cfdi->env) . '</td></tr>';
+
     print '<tr><td>Folio fiscal (UUID)</td><td><span class="factymx-request-id">'
         . dol_escape_htmltag((string) $cfdi->uuid) . '</span></td></tr>';
     print '<tr><td>Serie y folio</td><td>' . dol_escape_htmltag(trim($cfdi->serie . ' ' . $cfdi->folio)) . '</td></tr>';
     print '<tr><td>Fecha de timbrado</td><td>' . dol_escape_htmltag((string) $cfdi->stamped_at) . '</td></tr>';
     print '<tr><td>Total</td><td>' . price((float) $cfdi->total) . ' ' . dol_escape_htmltag((string) $cfdi->moneda) . '</td></tr>';
+
+    if ($cancelado) {
+        print '<tr><td>Cancelado el</td><td>' . dol_escape_htmltag((string) $cfdi->cancelled_at)
+            . ' <span class="opacitymedium">(motivo ' . dol_escape_htmltag((string) $cfdi->cancel_motivo) . ' — '
+            . dol_escape_htmltag(FactyCancel::MOTIVOS[$cfdi->cancel_motivo] ?? '') . ')</span></td></tr>';
+    }
+
+    // Estatus ante el SAT. Se muestra el valor en caché; consultar de verdad
+    // cuesta un folio, así que se hace sólo si el usuario lo pide.
+    print '<tr><td>Estatus en el SAT</td><td>';
+    if ($satStatus !== null) {
+        print '<strong>' . dol_escape_htmltag((string) ($satStatus['estado'] ?? '—')) . '</strong>';
+        if (!empty($satStatus['esCancelable'])) {
+            print ' <span class="opacitymedium">· ' . dol_escape_htmltag((string) $satStatus['esCancelable']) . '</span>';
+        }
+        if (!empty($satStatus['cached'])) {
+            print ' <span class="opacitymedium">(consultado el '
+                . dol_escape_htmltag((string) ($satStatus['checkedAt'] ?? '')) . ')</span>';
+        }
+    } else {
+        print '<span class="opacitymedium">Sin consultar.</span>';
+    }
+    print ' <a class="button smallpaddingimp" href="' . $_SERVER['PHP_SELF'] . '?facid=' . ((int) $object->id)
+        . '&action=satstatus&token=' . newToken() . '">Consultar al SAT</a>';
+    print '<br><span class="opacitymedium">Cada consulta al SAT consume un folio de tu cuenta, '
+        . 'así que no se hace sola al abrir esta pantalla.</span>';
+    print '</td></tr>';
+
+    print '<tr><td>Archivos</td><td>';
+    if ($cfdi->xml_path || $cfdi->pdf_path) {
+        if ($cfdi->xml_path) {
+            print '<a href="' . DOL_URL_ROOT . '/document.php?modulepart=facture&file='
+                . urlencode((string) $cfdi->xml_path) . '">XML</a> ';
+        }
+        if ($cfdi->pdf_path) {
+            print '<a href="' . DOL_URL_ROOT . '/document.php?modulepart=facture&file='
+                . urlencode((string) $cfdi->pdf_path) . '">PDF</a> ';
+        }
+        if ($cfdi->acuse_path) {
+            print '<a href="' . DOL_URL_ROOT . '/document.php?modulepart=facture&file='
+                . urlencode((string) $cfdi->acuse_path) . '">Acuse de cancelación</a> ';
+        }
+        print '<span class="opacitymedium">— también aparecen en la pestaña Documentos.</span>';
+    } else {
+        print '<span class="opacitymedium">Todavía no se han descargado.</span>';
+    }
+    print ' <a class="button smallpaddingimp" href="' . $_SERVER['PHP_SELF'] . '?facid=' . ((int) $object->id)
+        . '&action=fetchfiles&token=' . newToken() . '">Descargar de Facty</a>';
+    print '</td></tr>';
+
     print '</table>';
 
-    print '<div class="center"><br><span class="opacitymedium">'
-        . 'La descarga del XML y del PDF, la cancelación y la consulta de estatus llegan en la siguiente versión.'
-        . '</span></div>';
+    // --- Cancelación
+    if (!$cancelado && $user->hasRight('factymx', 'cfdi', 'cancel')) {
+        print '<br><table class="noborder centpercent"><tr class="liste_titre"><td colspan="2">Cancelar el CFDI</td></tr>';
+        print '<tr class="oddeven"><td colspan="2">';
+        print '<div class="warning">Cancelar consume un timbre y no se puede deshacer. '
+            . 'El SAT puede además requerir la aceptación del receptor según el caso.</div>';
+        print '</td></tr>';
+
+        print '<tr class="oddeven"><td class="titlefield">Motivo</td><td>';
+        print '<form method="POST" action="' . $_SERVER['PHP_SELF'] . '?facid=' . ((int) $object->id) . '">';
+        print '<input type="hidden" name="token" value="' . newToken() . '">';
+        print '<input type="hidden" name="action" value="cancel">';
+        print '<select name="motivo" class="flat" id="factymx-motivo">';
+        foreach (FactyCancel::MOTIVOS as $code => $label) {
+            print '<option value="' . $code . '">' . $code . ' — ' . dol_escape_htmltag($label) . '</option>';
+        }
+        print '</select>';
+        print '</td></tr>';
+
+        print '<tr class="oddeven"><td>Folio que lo sustituye</td><td>';
+        print '<input type="text" name="folio_sustitucion" size="40" placeholder="sólo para el motivo 01">';
+        print '<br><span class="opacitymedium">Obligatorio con el motivo 01, y no válido con los demás.</span>';
+        print '</td></tr>';
+
+        print '<tr class="oddeven"><td></td><td>';
+        print '<input type="submit" class="button butActionDelete" value="Cancelar el CFDI" '
+            . 'onclick="return confirm(\'Esto cancela el comprobante ante el SAT y consume un timbre. ¿Continuar?\');">';
+        print '</form>';
+        print '</td></tr></table>';
+    }
 } elseif ($cfdi !== null && $cfdi->status === FactyCfdi::STATUS_PENDING) {
     // Ni "listo" ni "falló": el módulo no sabe todavía. Decirlo tal cual es lo
     // único honesto, y evita que alguien vuelva a darle al botón.

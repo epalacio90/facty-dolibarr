@@ -174,6 +174,84 @@ class FactyClient
     }
 
     /**
+     * Descarga un artefacto (XML, PDF, acuse) y devuelve los bytes tal cual.
+     *
+     * Aparte de `request()` porque estas respuestas NO son JSON: pasarlas por
+     * `json_decode` devolvería un arreglo vacío y el archivo se guardaría
+     * corrupto sin que nadie se enterara hasta abrirlo. Los errores, en cambio,
+     * sí vienen en JSON, así que se detectan por el código de estado y se
+     * decodifican sólo entonces.
+     *
+     * @return array{body:string, contentType:string}
+     * @throws FactyTransportException|FactyApiException
+     */
+    public function download(string $path): array
+    {
+        $url         = $this->baseUrl . $path;
+        $requestId   = null;
+        $contentType = '';
+        $startedAt   = microtime(true);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, array(
+            CURLOPT_HTTPGET        => true,
+            CURLOPT_HTTPHEADER     => array(
+                'X-API-Key: ' . $this->apiKey,
+                'Accept: */*',
+                'User-Agent: factymx/' . FACTYMX_VERSION . ' dolibarr/' . DOL_VERSION,
+            ),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => max($this->timeout, 60),
+            CURLOPT_CONNECTTIMEOUT => min(10, $this->timeout),
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$requestId, &$contentType) {
+                if (stripos($header, 'x-request-id:') === 0) {
+                    $requestId = trim(substr($header, 13));
+                }
+                if (stripos($header, 'content-type:') === 0) {
+                    $contentType = trim(substr($header, 13));
+                }
+
+                return strlen($header);
+            },
+        ));
+
+        $this->applyProxy($ch);
+
+        $raw     = curl_exec($ch);
+        $status  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+        if ($raw === false) {
+            $this->log('GET', $path, 0, null, $requestId, $durationMs, 'transport: ' . $curlErr);
+
+            throw new FactyTransportException('No se pudo descargar el archivo desde Facty (' . $curlErr . ').');
+        }
+
+        if ($status >= 400) {
+            $body = json_decode($raw, true);
+            $body = is_array($body) ? $body : array();
+            $code = isset($body['code']) ? (string) $body['code'] : '';
+            $this->log('GET', $path, $status, $code, $requestId, $durationMs, null);
+
+            throw new FactyApiException(
+                $status,
+                isset($body['error']) ? (string) $body['error'] : ('Error HTTP ' . $status),
+                $code,
+                $requestId
+            );
+        }
+
+        $this->log('GET', $path, $status, null, $requestId, $durationMs, null);
+
+        return array('body' => (string) $raw, 'contentType' => $contentType);
+    }
+
+    /**
      * Muchas instalaciones de Dolibarr son autoalojadas y salen a internet por
      * un proxy, o no salen. Se reutiliza el proxy que Dolibarr ya tiene
      * configurado para no pedir la misma información dos veces.
