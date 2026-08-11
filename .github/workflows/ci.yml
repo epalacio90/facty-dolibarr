@@ -74,6 +74,22 @@ jobs:
             exit 1
           fi
 
+      # Dolibarr escribe directamente en las propiedades de los objetos que
+      # instancia (ganchos, cron) y les asigna null. Una propiedad pública
+      # tipada en esas clases es un fatal en cuanto se carga una página que
+      # dispare el gancho — no al usar la función, sino al abrir el módulo.
+      # Encontrado en la primera instalación real; el linter y PSR-12 no lo ven.
+      - name: Sin propiedades públicas tipadas en clases del núcleo
+        run: |
+          set -euo pipefail
+          if grep -nE '^\s*public\s+\??(string|int|float|bool|array)\s+\$' \
+               factymx/class/actions_factymx.class.php \
+               factymx/class/FactyJob.class.php \
+               factymx/core/triggers/*.php 2>/dev/null; then
+            echo "::error::Dolibarr asigna null a estas propiedades; no pueden llevar tipo."
+            exit 1
+          fi
+
       # Verificación de TLS: la llave viaja en cada petición.
       - name: TLS siempre verificado
         run: |

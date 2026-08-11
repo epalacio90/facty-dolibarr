@@ -15,10 +15,19 @@ class ActionsFactyMX
     /** @var DoliDB */
     public $db;
 
-    public string $error = '';
-    public array $errors = array();
-    public array $results = array();
-    public string $resprints = '';
+    // SIN tipo, a propósito. Estas cuatro propiedades son el contrato con el
+    // HookManager de Dolibarr, y el núcleo las REINICIA a null entre ganchos
+    // (hookmanager.class.php). Declararlas `public string`/`public array`
+    // provoca un TypeError fatal en cuanto se carga cualquier página que
+    // dispare un gancho — no al usar el módulo, sino al abrirlo.
+    //
+    // La lección es más general: en las clases que instancia y manipula el
+    // núcleo de Dolibarr, el tipado estricto de propiedades públicas choca con
+    // un contrato que no controlamos.
+    public $error = '';
+    public $errors = array();
+    public $results = array();
+    public $resprints = '';
 
     public function __construct($db)
     {

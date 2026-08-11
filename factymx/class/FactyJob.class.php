@@ -52,9 +52,12 @@ class FactyJob
     /** @var DoliDB */
     public $db;
 
-    public string $error = '';
-    public array $errors = array();
-    public string $output = '';
+    // SIN tipo, por la misma razón que en actions_factymx: el planificador de
+    // tareas de Dolibarr escribe estas propiedades directamente y les asigna
+    // null. Un tipo estricto aquí convertiría un cron en un fatal.
+    public $error = '';
+    public $errors = array();
+    public $output = '';
 
     /**
      * Dolibarr construye la clase del cron sin argumentos, así que se admite
