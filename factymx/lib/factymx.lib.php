@@ -161,3 +161,49 @@ function factymxIsRfcGenerico($rfc)
 {
     return strtoupper(trim((string) $rfc)) === 'XAXX010101000';
 }
+
+/**
+ * Etiqueta del estado de un CFDI, con color.
+ *
+ * `pending` se traduce como "en proceso" y no como "pendiente": el matiz importa
+ * porque significa "no sabemos el resultado", no "falta hacerlo". Alguien que lea
+ * "pendiente" va a querer darle al botón otra vez, que es justo lo que no debe
+ * hacer.
+ *
+ * @param  string $status
+ * @return string HTML
+ */
+function factymxStatusLabel($status)
+{
+    switch ($status) {
+        case 'stamped':
+            return '<span class="factymx-status-stamped">Timbrado</span>';
+        case 'cancelled':
+            return '<span class="factymx-status-cancelled">Cancelado</span>';
+        case 'failed':
+            return '<span class="factymx-status-failed">Con error</span>';
+        case 'pending':
+            return '<span class="factymx-status-pending">En proceso</span>';
+        default:
+            return '<span class="opacitymedium">Sin timbrar</span>';
+    }
+}
+
+/**
+ * Recorta un folio fiscal para las listas, dejándolo copiable completo.
+ *
+ * Un UUID entero rompe el ancho de cualquier tabla, pero truncarlo sin más
+ * obliga a abrir el documento para copiarlo. El title lleva el valor completo.
+ *
+ * @param  ?string $uuid
+ * @return string HTML
+ */
+function factymxUuidShort($uuid)
+{
+    if (empty($uuid)) {
+        return '<span class="opacitymedium">—</span>';
+    }
+
+    return '<span class="factymx-request-id" title="' . dol_escape_htmltag($uuid) . '">'
+        . dol_escape_htmltag(substr((string) $uuid, 0, 8)) . '…</span>';
+}

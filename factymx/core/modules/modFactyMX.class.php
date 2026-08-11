@@ -161,6 +161,8 @@ class modFactyMX extends DolibarrModules
                 . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/paiement/rep.php?id=__ID__',
             'thirdparty:+factymxfiscal:Datos fiscales CFDI:factymx@factymx:'
                 . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/societe/fiscal.php?socid=__ID__',
+            'thirdparty:+factymxcfdis:CFDI del cliente:factymx@factymx:'
+                . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/societe/cfdis.php?socid=__ID__',
             'product:+factymxsat:Datos SAT:factymx@factymx:'
                 . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/product/sat.php?id=__ID__',
         );
@@ -176,6 +178,51 @@ class modFactyMX extends DolibarrModules
             'mainmenu' => 'factymx',
             'leftmenu' => '',
             'url'      => '/factymx/index.php',
+            'langs'    => 'factymx',
+            'position' => 1000 + $r,
+            'enabled'  => '$conf->factymx->enabled',
+            'perms'    => '$user->hasRight("factymx", "cfdi", "read")',
+            'target'   => '',
+            'user'     => 2,
+        );
+
+        $this->menu[$r++] = array(
+            'fk_menu'  => 'fk_mainmenu=factymx',
+            'type'     => 'left',
+            'titre'    => 'Facturas CFDI',
+            'mainmenu' => 'factymx',
+            'leftmenu' => 'factymx_facturas',
+            'url'      => '/factymx/consultas/facturas.php',
+            'langs'    => 'factymx',
+            'position' => 1000 + $r,
+            'enabled'  => '$conf->factymx->enabled',
+            'perms'    => '$user->hasRight("factymx", "cfdi", "read")',
+            'target'   => '',
+            'user'     => 2,
+        );
+
+        $this->menu[$r++] = array(
+            'fk_menu'  => 'fk_mainmenu=factymx,fk_leftmenu=factymx_facturas',
+            'type'     => 'left',
+            'titre'    => 'Sin timbrar',
+            'mainmenu' => 'factymx',
+            'leftmenu' => 'factymx_facturas_sin',
+            'url'      => '/factymx/consultas/facturas.php?filtro=sintimbrar',
+            'langs'    => 'factymx',
+            'position' => 1000 + $r,
+            'enabled'  => '$conf->factymx->enabled',
+            'perms'    => '$user->hasRight("factymx", "cfdi", "read")',
+            'target'   => '',
+            'user'     => 2,
+        );
+
+        $this->menu[$r++] = array(
+            'fk_menu'  => 'fk_mainmenu=factymx',
+            'type'     => 'left',
+            'titre'    => 'Complementos de pago',
+            'mainmenu' => 'factymx',
+            'leftmenu' => 'factymx_pagos',
+            'url'      => '/factymx/consultas/pagos.php',
             'langs'    => 'factymx',
             'position' => 1000 + $r,
             'enabled'  => '$conf->factymx->enabled',

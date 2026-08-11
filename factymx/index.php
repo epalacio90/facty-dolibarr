@@ -116,11 +116,100 @@ if ($connError !== null) {
 }
 
 print '</table>';
-print '</div></div>';
 
-print '<br><span class="opacitymedium">'
-    . 'Las listas de CFDI y complementos de pago llegan en una versión posterior de este módulo.'
-    . '</span>';
+// Trabajos con problemas. Va aquí arriba y no escondido en el diagnóstico: si
+// algo quedó a medias, es lo primero que hay que saber al abrir el módulo.
+$sql = 'SELECT COUNT(*) AS n FROM ' . MAIN_DB_PREFIX . 'factymx_job
+        WHERE entity = ' . ((int) $conf->entity) . " AND env = '" . $db->escape($env) . "'
+          AND status IN ('pending','failed')";
+$pendientes = 0;
+$resq = $db->query($sql);
+if ($resq && ($rowj = $db->fetch_object($resq))) {
+    $pendientes = (int) $rowj->n;
+    $db->free($resq);
+}
+
+if ($pendientes > 0) {
+    print '<br><div class="warning">Hay <strong>' . $pendientes . '</strong> trabajo(s) pendientes o con error. '
+        . '<a href="' . dol_buildpath('/factymx/admin/diagnostics.php', 1) . '">Ver diagnóstico</a></div>';
+}
+
+print '</div>';
+
+// --- Facturas sin timbrar: la pregunta que más se hace al abrir el módulo.
+print '<div class="fichetwothirdright">';
+
+$sql = 'SELECT f.rowid, f.ref, f.datef, f.total_ttc, s.nom AS cliente
+        FROM ' . MAIN_DB_PREFIX . 'facture f
+        INNER JOIN ' . MAIN_DB_PREFIX . 'societe s ON s.rowid = f.fk_soc
+        LEFT JOIN ' . MAIN_DB_PREFIX . "factymx_cfdi c
+               ON c.fk_facture = f.rowid AND c.entity = f.entity AND c.env = '" . $db->escape($env) . "'
+        WHERE f.entity = " . ((int) $conf->entity) . " AND f.fk_statut > 0
+          AND (c.rowid IS NULL OR c.status = 'failed')
+        ORDER BY f.datef DESC LIMIT 10";
+
+print '<table class="noborder centpercent"><tr class="liste_titre">';
+print '<td colspan="4">Facturas sin timbrar</td></tr>';
+
+$n = 0;
+$resq = $db->query($sql);
+if ($resq) {
+    while ($row = $db->fetch_object($resq)) {
+        $n++;
+        print '<tr class="oddeven">';
+        print '<td><a href="' . dol_buildpath('/factymx/facture/cfdi.php', 1) . '?facid=' . ((int) $row->rowid) . '">'
+            . dol_escape_htmltag((string) $row->ref) . '</a></td>';
+        print '<td>' . dol_escape_htmltag(dol_trunc((string) $row->cliente, 28)) . '</td>';
+        print '<td>' . dol_print_date($db->jdate($row->datef), 'day') . '</td>';
+        print '<td class="right">' . price((float) $row->total_ttc) . '</td>';
+        print '</tr>';
+    }
+    $db->free($resq);
+}
+if ($n === 0) {
+    print '<tr class="oddeven"><td colspan="4"><span class="ok">'
+        . 'No hay facturas validadas pendientes de timbrar.</span></td></tr>';
+}
+print '<tr class="liste_total"><td colspan="4"><a href="'
+    . dol_buildpath('/factymx/consultas/facturas.php', 1) . '?filtro=sintimbrar">Ver todas</a></td></tr>';
+print '</table><br>';
+
+// --- Últimos CFDI emitidos en este ambiente.
+$sql = 'SELECT f.rowid, f.ref, c.uuid, c.stamped_at, c.total, c.moneda, c.status
+        FROM ' . MAIN_DB_PREFIX . 'factymx_cfdi c
+        INNER JOIN ' . MAIN_DB_PREFIX . 'facture f ON f.rowid = c.fk_facture
+        WHERE c.entity = ' . ((int) $conf->entity) . " AND c.env = '" . $db->escape($env) . "'
+          AND c.status IN ('stamped','cancelled')
+        ORDER BY c.stamped_at DESC LIMIT 10";
+
+print '<table class="noborder centpercent"><tr class="liste_titre">';
+print '<td colspan="4">Últimos CFDI</td></tr>';
+
+$n = 0;
+$resq = $db->query($sql);
+if ($resq) {
+    while ($row = $db->fetch_object($resq)) {
+        $n++;
+        print '<tr class="oddeven">';
+        print '<td><a href="' . dol_buildpath('/factymx/facture/cfdi.php', 1) . '?facid=' . ((int) $row->rowid) . '">'
+            . dol_escape_htmltag((string) $row->ref) . '</a></td>';
+        print '<td>' . factymxUuidShort($row->uuid) . '</td>';
+        print '<td>' . factymxStatusLabel((string) $row->status) . '</td>';
+        print '<td class="right">' . price((float) $row->total) . ' '
+            . dol_escape_htmltag((string) $row->moneda) . '</td>';
+        print '</tr>';
+    }
+    $db->free($resq);
+}
+if ($n === 0) {
+    print '<tr class="oddeven"><td colspan="4"><span class="opacitymedium">'
+        . 'Todavía no se ha timbrado nada en este ambiente.</span></td></tr>';
+}
+print '<tr class="liste_total"><td colspan="4"><a href="'
+    . dol_buildpath('/factymx/consultas/facturas.php', 1) . '?filtro=timbradas">Ver todos</a></td></tr>';
+print '</table>';
+
+print '</div></div>';
 
 llxFooter();
 $db->close();
