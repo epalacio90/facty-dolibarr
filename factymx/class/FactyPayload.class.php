@@ -111,7 +111,39 @@ class FactyPayload
         }
 
         if (!empty($opts['informacionGlobal'])) {
-            $body['informacionGlobal'] = $opts['informacionGlobal'];
+            $g = $opts['informacionGlobal'];
+
+            // Se valida aquí y no sólo en el formulario porque una factura
+            // global mal formada se rechaza hasta el PAC, y para entonces ya se
+            // intentó cobrar el timbre. Son tres campos con dominios cerrados:
+            // comprobarlos cuesta nada.
+            $periodicidad = (string) ($g['periodicidad'] ?? '');
+            $meses        = (string) ($g['meses'] ?? '');
+            $anio         = (int) ($g['anio'] ?? 0);
+
+            if (!preg_match('/^0[1-5]$/', $periodicidad)) {
+                $this->problems[] = 'La periodicidad de la factura global no es válida.';
+            }
+            // 01–12 son meses; 13–18 son bimestres, que es lo que se usa cuando
+            // la periodicidad es bimestral.
+            if (!preg_match('/^(0[1-9]|1[0-8])$/', $meses)) {
+                $this->problems[] = 'El mes o bimestre de la factura global no es válido.';
+            }
+            if ($periodicidad === '05' && (int) $meses < 13) {
+                $this->problems[] = 'Con periodicidad bimestral hay que elegir un bimestre (13 a 18), no un mes.';
+            }
+            if ($periodicidad !== '05' && (int) $meses > 12) {
+                $this->problems[] = 'Sólo la periodicidad bimestral admite un bimestre (13 a 18).';
+            }
+            if ($anio < 2021 || $anio > 2099) {
+                $this->problems[] = 'El año de la factura global no es válido.';
+            }
+
+            $body['informacionGlobal'] = array(
+                'periodicidad' => $periodicidad,
+                'meses'        => $meses,
+                'anio'         => $anio,
+            );
         }
 
         if ($body['usoCfdi'] === '') {

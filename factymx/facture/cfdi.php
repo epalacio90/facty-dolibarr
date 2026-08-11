@@ -71,11 +71,27 @@ if ($action === 'stamp' && $user->hasRight('factymx', 'cfdi', 'create')) {
         'formaPago'  => GETPOST('formapago', 'alpha'),
     );
 
+    // CFDI relacionados: el desplegable propone los timbrados de este cliente;
+    // el campo de texto es la salida para folios emitidos con otra herramienta,
+    // que el SAT acepta igual pero de los que aquí no hay registro.
     $uuidRel = trim((string) GETPOST('uuid_relacionado', 'alpha'));
+    if ($uuidRel === '') {
+        $uuidRel = trim((string) GETPOST('uuid_relacionado_sel', 'alpha'));
+    }
     if ($uuidRel !== '') {
         $opts['cfdiRelacionados'] = array(
             'tipoRelacion' => GETPOST('tiporelacion', 'alpha') ?: '01',
-            'uuids'        => array($uuidRel),
+            'uuids'        => array(strtoupper($uuidRel)),
+        );
+    }
+
+    // Factura global: sustituye al receptor por el público en general y exige
+    // el periodo que ampara.
+    if (GETPOST('es_global', 'int')) {
+        $opts['informacionGlobal'] = array(
+            'periodicidad' => (string) GETPOST('periodicidad', 'alpha'),
+            'meses'        => (string) GETPOST('meses', 'alpha'),
+            'anio'         => (int) GETPOST('anio', 'int'),
         );
     }
 
@@ -339,31 +355,93 @@ if ($cfdi !== null && in_array($cfdi->status, array(FactyCfdi::STATUS_STAMPED, F
     }
     print '</td></tr>';
 
-    // Nota de crédito: la relación con el comprobante original es obligatoria.
-    if ($isEgreso) {
-        print '<tr><td>CFDI que corrige</td><td>';
-
-        // Si la factura de origen se timbró con este módulo, ya tenemos su
-        // UUID: se propone en vez de pedirle al usuario que lo busque.
-        $sugerido = '';
-        if (!empty($object->fk_facture_source)) {
-            $origen = FactyCfdi::fetchByFacture($db, (int) $object->fk_facture_source);
-            if ($origen !== null && $origen->uuid) {
-                $sugerido = (string) $origen->uuid;
-            }
+    // ------------------------------------------------------ CFDI relacionados
+    //
+    // Para una nota de crédito la relación es obligatoria; para una factura es
+    // opcional pero legítima (sustituciones, anticipos, devoluciones), así que
+    // el bloque se ofrece siempre en vez de sólo en el egreso.
+    $sugerido = '';
+    if ($isEgreso && !empty($object->fk_facture_source)) {
+        // Si la factura de origen se timbró con este módulo ya tenemos su folio:
+        // se propone en vez de pedirle al usuario que lo busque.
+        $origen = FactyCfdi::fetchByFacture($db, (int) $object->fk_facture_source);
+        if ($origen !== null && $origen->uuid) {
+            $sugerido = (string) $origen->uuid;
         }
+    }
 
-        print '<input type="text" name="uuid_relacionado" size="40" value="' . dol_escape_htmltag($sugerido) . '" '
-            . 'placeholder="folio fiscal de la factura original">';
-        if ($sugerido !== '') {
-            print ' <span class="opacitymedium">(tomado de la factura de origen)</span>';
+    $relacionables = factymxRelatableCfdis($db, (int) $object->socid, (int) $object->id);
+
+    print '<tr><td>' . ($isEgreso ? 'CFDI que corrige' : 'CFDI relacionado') . '</td><td>';
+
+    if ($relacionables) {
+        print '<select name="uuid_relacionado_sel" class="flat minwidth300">';
+        print '<option value="">— ninguno —</option>';
+        foreach ($relacionables as $uuid => $label) {
+            print '<option value="' . dol_escape_htmltag($uuid) . '"'
+                . ($uuid === $sugerido ? ' selected' : '') . '>'
+                . dol_escape_htmltag($label) . '</option>';
         }
-        print '<br><select name="tiporelacion" class="flat">';
+        print '</select><br>';
+    }
+
+    print '<input type="text" name="uuid_relacionado" size="40" value="'
+        . dol_escape_htmltag($relacionables ? '' : $sugerido) . '" placeholder="o pega un folio fiscal">';
+    print '<br><span class="opacitymedium">La lista sólo trae los CFDI que este módulo timbró para este cliente '
+        . 'en el ambiente actual. Si el comprobante se emitió con otra herramienta, pega su folio a mano: '
+        . 'el SAT acepta cualquier folio válido.</span>';
+
+    print '<br><select name="tiporelacion" class="flat">';
+    $tiposRel = $catalog->all('TipoRelacion');
+    if ($tiposRel) {
+        foreach ($tiposRel as $code => $label) {
+            $sel = ($isEgreso && $code === '01') ? ' selected' : '';
+            print '<option value="' . dol_escape_htmltag((string) $code) . '"' . $sel . '>'
+                . dol_escape_htmltag($code . ' — ' . $label) . '</option>';
+        }
+    } else {
+        // Sin catálogo disponible, los tres tipos que cubren casi todos los
+        // casos reales, para no dejar la pantalla inutilizable.
         print '<option value="01">01 — Nota de crédito de los documentos relacionados</option>';
         print '<option value="03">03 — Devolución de mercancía</option>';
         print '<option value="04">04 — Sustitución de los CFDI previos</option>';
-        print '</select>';
+    }
+    print '</select>';
+    if ($isEgreso) {
         print '<br><span class="opacitymedium">El SAT exige relacionar la nota de crédito con el comprobante que corrige.</span>';
+    }
+    print '</td></tr>';
+
+    // ---------------------------------------------------------- factura global
+    //
+    // Ampara las ventas al público en general de un periodo. El receptor pasa a
+    // ser el RFC genérico, así que sólo tiene sentido si la factura ya va a ese
+    // cliente: ofrecerla sobre un receptor identificado produciría un
+    // comprobante que el SAT rechaza, o peor, uno emitido a nombre equivocado.
+    if (!$isEgreso) {
+        $rfcCliente  = (string) ($object->thirdparty->idprof1 ?? '');
+        $esGenerico  = factymxIsRfcGenerico($rfcCliente);
+
+        print '<tr><td>Factura global</td><td>';
+
+        if (!$esGenerico) {
+            print '<span class="opacitymedium">Disponible sólo cuando el receptor es el público en general '
+                . '(RFC XAXX010101000). El cliente de esta factura es '
+                . dol_escape_htmltag($rfcCliente !== '' ? $rfcCliente : 'sin RFC') . '.</span>';
+        } else {
+            print '<label><input type="checkbox" name="es_global" value="1"> '
+                . 'Esta factura ampara ventas al público en general</label>';
+
+            print '<div style="margin-top:6px">';
+            print 'Periodicidad ';
+            print $catalog->selectHtml('Periodicidad', 'periodicidad', '04', false);
+            print ' Mes/bimestre ';
+            print $catalog->selectHtml('Meses', 'meses', dol_print_date(dol_now(), '%m'), false);
+            print ' Año <input type="number" name="anio" size="5" min="2021" max="2099" value="'
+                . dol_print_date(dol_now(), '%Y') . '">';
+            print '</div>';
+            print '<span class="opacitymedium">El periodo debe corresponder a las ventas que ampara este comprobante.</span>';
+        }
         print '</td></tr>';
     }
 

@@ -109,3 +109,55 @@ function factymxIdempotencyKey($objectType, $objectId)
 
     return 'dolibarr:' . FactyConfig::env() . ':' . ((int) $conf->entity) . ':' . $objectType . ':' . ((int) $objectId);
 }
+
+/**
+ * CFDI de este cliente que se pueden relacionar, en el ambiente activo.
+ *
+ * Sólo aparecen los que timbró este módulo: relacionar exige el folio fiscal, y
+ * de los comprobantes emitidos con otra herramienta no tenemos ninguno. La
+ * pantalla ofrece además un campo para pegar un folio a mano, que es la salida
+ * para justamente ese caso — el SAT acepta cualquier UUID válido, venga de donde
+ * venga.
+ *
+ * @param  DoliDB $db
+ * @param  int    $socid              Cliente de la factura.
+ * @param  int    $excludeFactureId   La factura actual, que no se relaciona consigo misma.
+ * @return array<string,string> uuid => etiqueta legible
+ */
+function factymxRelatableCfdis($db, $socid, $excludeFactureId = 0)
+{
+    global $conf;
+
+    $env = FactyConfig::env();
+
+    $sql = 'SELECT c.uuid, c.serie, c.folio, c.total, c.moneda, c.stamped_at, f.ref
+            FROM ' . MAIN_DB_PREFIX . 'factymx_cfdi c
+            INNER JOIN ' . MAIN_DB_PREFIX . 'facture f ON f.rowid = c.fk_facture
+            WHERE c.entity = ' . ((int) $conf->entity) . "
+              AND c.env = '" . $db->escape($env) . "'
+              AND c.status = '" . $db->escape(FactyCfdi::STATUS_STAMPED) . "'
+              AND c.uuid IS NOT NULL
+              AND f.fk_soc = " . ((int) $socid) . '
+              AND c.fk_facture <> ' . ((int) $excludeFactureId) . '
+            ORDER BY c.stamped_at DESC
+            LIMIT 100';
+
+    $out = array();
+    $res = $db->query($sql);
+    if ($res) {
+        while ($row = $db->fetch_object($res)) {
+            $out[(string) $row->uuid] = $row->ref
+                . ' · ' . price((float) $row->total) . ' ' . $row->moneda
+                . ' · ' . dol_print_date($db->jdate($row->stamped_at), 'day');
+        }
+        $db->free($res);
+    }
+
+    return $out;
+}
+
+/** RFC genérico nacional: obliga a factura global y a nombre "PUBLICO EN GENERAL". */
+function factymxIsRfcGenerico($rfc)
+{
+    return strtoupper(trim((string) $rfc)) === 'XAXX010101000';
+}
