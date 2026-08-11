@@ -5,35 +5,49 @@
 require_once __DIR__ . '/FactyConfig.class.php';
 require_once __DIR__ . '/FactyClient.class.php';
 require_once __DIR__ . '/FactyCfdi.class.php';
+require_once __DIR__ . '/FactyPayment.class.php';
+require_once __DIR__ . '/FactyCatalog.class.php';
 
 /**
  * \file    class/FactyJob.class.php
  * \ingroup factymx
- * \brief   Bandeja de salida: reintentos y, sobre todo, RECONCILIACIÓN.
+ * \brief   Bandeja de salida: reconciliación y mantenimiento.
  *
  * La regla que gobierna este archivo: **un fallo de red no es un resultado
- * negativo.** Un timeout significa "no sé", no "no se timbró" — la petición
- * pudo haber llegado y el CFDI puede existir ya en Facty. Por eso el trabajo
- * pendiente por defecto es `reconcile` (preguntar por la llave de idempotencia
- * y converger), no `stamp` (volver a intentar). Reintentar a ciegas gasta
- * timbres de verdad, y ese dinero es del cliente.
+ * negativo.** Un timeout significa "no sé", no "no se timbró" — la petición pudo
+ * haber llegado y el CFDI puede existir ya. Por eso el único trabajo que se
+ * encola tras un fallo es `reconcile`: preguntar y converger. Nunca `stamp`,
+ * porque reintentar a ciegas gasta timbres de verdad.
+ *
+ * Lo que este cron **no** hace, a propósito:
+ *
+ *  - **No consulta el estatus del SAT.** Cada consulta reenviada al PAC consume
+ *    un folio de la cuenta del cliente; un cron que las hiciera solo sería un
+ *    goteo de cargos que nadie pidió. El estatus se consulta cuando alguien lo
+ *    pide, desde la pantalla.
+ *  - **No reintenta cancelaciones.** Si una cancelación no se pudo confirmar,
+ *    hay que verificar el estatus ante el SAT antes de volver a intentarla:
+ *    insistir podría gastar un segundo timbre sobre un comprobante ya cancelado.
  *
  * Se ejecuta desde el cron de Dolibarr cada 5 minutos.
  */
 class FactyJob
 {
     const KIND_RECONCILE = 'reconcile';
-    const KIND_CANCEL    = 'cancel';
-    const KIND_SAT_STATUS = 'sat_status';
     const KIND_CATALOG   = 'catalog_refresh';
 
     const STATUS_PENDING = 'pending';
     const STATUS_DONE    = 'done';
     const STATUS_FAILED  = 'failed';
 
-    /** Después de esto se deja de reintentar y se pide intervención humana.
-     *  Un trabajo que falló 8 veces no se va a arreglar por insistir. */
+    /** Después de esto se pide intervención humana. Un trabajo que falló ocho
+     *  veces no se arregla por insistir una novena. */
     const MAX_ATTEMPTS = 8;
+
+    /** Un registro en proceso más viejo que esto se reconcilia aunque nadie
+     *  haya encolado el trabajo: cubre el caso de que PHP muriera entre reservar
+     *  la fila y encolar, que si no dejaría la factura bloqueada para siempre. */
+    const STALE_PENDING_MINUTES = 15;
 
     /** @var DoliDB */
     public $db;
@@ -72,8 +86,8 @@ class FactyJob
         $entity = (int) $conf->entity;
         $env    = FactyConfig::env();
 
-        $sql = 'SELECT rowid FROM ' . MAIN_DB_PREFIX . "factymx_job
-                WHERE entity = " . $entity . " AND env = '" . $db->escape($env) . "'
+        $sql = 'SELECT rowid FROM ' . MAIN_DB_PREFIX . 'factymx_job
+                WHERE entity = ' . $entity . " AND env = '" . $db->escape($env) . "'
                   AND kind = '" . $db->escape($kind) . "'
                   AND ref_table = '" . $db->escape($refTable) . "' AND ref_id = " . ((int) $refId) . "
                   AND status = '" . $db->escape(self::STATUS_PENDING) . "'";
@@ -104,7 +118,7 @@ class FactyJob
     /**
      * Punto de entrada del cron de Dolibarr.
      *
-     * @return int 0 si todo salió bien, <0 si hubo errores (Dolibarr lo marca).
+     * @return int 0 si todo salió bien, <0 si hubo errores.
      */
     public function runPending(): int
     {
@@ -118,10 +132,12 @@ class FactyJob
         // las credenciales, los ids y las consecuencias son otras.
         $env = FactyConfig::env();
         if (!FactyConfig::isConfigured($env)) {
-            $this->output = 'Facty no está configurado para el ambiente ' . FactyConfig::label($env) . '; no hay nada que hacer.';
+            $this->output = 'Facty no está configurado para el ambiente ' . FactyConfig::label($env) . '.';
 
             return 0;
         }
+
+        $adopted = $this->sweepStalePending($env);
 
         $sql = 'SELECT * FROM ' . MAIN_DB_PREFIX . "factymx_job
                 WHERE status = '" . $this->db->escape(self::STATUS_PENDING) . "'
@@ -138,10 +154,16 @@ class FactyJob
             return -1;
         }
 
-        $done = 0;
-        $failed = 0;
-
+        $rows = array();
         while ($row = $this->db->fetch_object($res)) {
+            $rows[] = $row;
+        }
+        $this->db->free($res);
+
+        $done = 0;
+        $incidencias = 0;
+
+        foreach ($rows as $row) {
             try {
                 $this->runOne($row);
                 $this->finish((int) $row->rowid, self::STATUS_DONE, null);
@@ -151,26 +173,70 @@ class FactyJob
                 // creciente; NO se marca como fallido, porque "no sé" no es
                 // "no pasó".
                 $this->reschedule($row, $e->getMessage());
-                $failed++;
+                $incidencias++;
             } catch (FactyApiException $e) {
                 if ($e->isRetryable()) {
                     $this->reschedule($row, $e->getMessage());
                 } else {
-                    // 401/403/402/422: insistir no lo arregla. Se detiene y se
-                    // deja el error a la vista en el diagnóstico.
+                    // 401/403/402/422: insistir no lo arregla.
                     $this->finish((int) $row->rowid, self::STATUS_FAILED, $e->userMessage());
                 }
-                $failed++;
+                $incidencias++;
             } catch (Exception $e) {
                 $this->finish((int) $row->rowid, self::STATUS_FAILED, $e->getMessage());
-                $failed++;
+                $incidencias++;
             }
         }
-        $this->db->free($res);
 
-        $this->output = 'Trabajos procesados: ' . $done . ' correctos, ' . $failed . ' con incidencias (' . FactyConfig::label($env) . ').';
+        $this->output = 'Reconciliaciones adoptadas: ' . $adopted
+            . '. Trabajos: ' . $done . ' completados, ' . $incidencias . ' con incidencias ('
+            . FactyConfig::label($env) . ').';
 
         return 0;
+    }
+
+    /**
+     * Busca registros atorados en `pending` sin trabajo encolado y les encola
+     * uno.
+     *
+     * Es la red de seguridad del caso peor: si PHP muere entre reservar la fila
+     * y encolar la reconciliación, esa factura queda bloqueada —  no se puede
+     * timbrar porque ya hay una fila en curso, y nadie va a resolverla. Sin este
+     * barrido haría falta tocar la base a mano.
+     *
+     * @return int cuántos se encolaron
+     */
+    private function sweepStalePending(string $env): int
+    {
+        global $conf;
+
+        $limite = $this->db->idate(dol_time_plus_duree(dol_now(), -self::STALE_PENDING_MINUTES, 'i'));
+        $n = 0;
+
+        foreach (array('factymx_cfdi', 'factymx_payment') as $table) {
+            $sql = 'SELECT t.rowid FROM ' . MAIN_DB_PREFIX . $table . " t
+                    LEFT JOIN " . MAIN_DB_PREFIX . "factymx_job j
+                           ON j.ref_table = '" . $this->db->escape($table) . "' AND j.ref_id = t.rowid
+                          AND j.status = '" . $this->db->escape(self::STATUS_PENDING) . "'
+                    WHERE t.entity = " . ((int) $conf->entity) . "
+                      AND t.env = '" . $this->db->escape($env) . "'
+                      AND t.status = 'pending'
+                      AND t.tms < '" . $limite . "'
+                      AND j.rowid IS NULL
+                    LIMIT 50";
+
+            $res = $this->db->query($sql);
+            if (!$res) {
+                continue;
+            }
+            while ($row = $this->db->fetch_object($res)) {
+                self::enqueue($this->db, self::KIND_RECONCILE, $table, (int) $row->rowid);
+                $n++;
+            }
+            $this->db->free($res);
+        }
+
+        return $n;
     }
 
     /** @throws Exception */
@@ -178,66 +244,153 @@ class FactyJob
     {
         switch ($row->kind) {
             case self::KIND_RECONCILE:
-                $this->reconcileCfdi((int) $row->ref_id);
+                if ($row->ref_table === 'factymx_payment') {
+                    $this->reconcilePayment((int) $row->ref_id);
+                } else {
+                    $this->reconcileCfdi((int) $row->ref_id);
+                }
                 break;
-            case self::KIND_SAT_STATUS:
-            case self::KIND_CANCEL:
             case self::KIND_CATALOG:
-                // Se implementan en las sub-fases E, F e I. Un trabajo de un
-                // tipo que este build no conoce se deja pendiente en lugar de
-                // borrarse: puede ser de una versión más nueva del módulo.
-                throw new Exception('Tipo de trabajo aún no implementado en esta versión: ' . $row->kind);
+                $this->refreshCatalogs();
+                break;
             default:
                 throw new Exception('Tipo de trabajo desconocido: ' . $row->kind);
         }
     }
 
     /**
-     * Resuelve un timbrado de resultado desconocido.
+     * Resuelve un timbrado de factura con resultado desconocido.
      *
-     * Pregunta a Facty por la llave de idempotencia. Si el CFDI existe, se
-     * adopta su resultado — no se vuelve a timbrar. Si no existe, la fila local
-     * se marca fallida para que una persona decida, en vez de que el cron gaste
-     * un timbre por su cuenta.
+     * Pregunta a Facty por la llave de idempotencia. Si el CFDI existe se adopta
+     * su resultado — no se vuelve a timbrar. Si no existe, la fila se marca
+     * fallida para que una persona decida, en lugar de que el cron gaste un
+     * timbre por su cuenta.
      */
-    private function reconcileCfdi(int $cfdiRowId): void
+    private function reconcileCfdi(int $rowId): void
     {
-        $sql = 'SELECT * FROM ' . MAIN_DB_PREFIX . 'factymx_cfdi WHERE rowid = ' . ((int) $cfdiRowId);
-        $res = $this->db->query($sql);
-        if (!$res || !($row = $this->db->fetch_object($res))) {
-            throw new Exception('No se encontró el registro de CFDI ' . $cfdiRowId . '.');
-        }
-        $this->db->free($res);
-
-        if ($row->status !== FactyCfdi::STATUS_PENDING) {
+        $row = $this->fetchRow('factymx_cfdi', $rowId);
+        if ($row === null || $row->status !== FactyCfdi::STATUS_PENDING) {
             return; // Ya se resolvió por otra vía.
         }
 
-        $client = new FactyClient($row->env);
-
-        // Facty acepta buscar por llave de idempotencia; si el timbrado llegó,
-        // la factura ya existe y viene con su UUID.
-        $found = $client->request(
-            'GET',
-            $client->orgPath('invoices?idempotencyKey=' . rawurlencode($row->idempotency_key))
-        );
-
-        $invoices = isset($found['invoices']) && is_array($found['invoices']) ? $found['invoices'] : array();
+        $invoice = $this->findByIdempotencyKey((string) $row->env, (string) $row->idempotency_key);
 
         $cfdi = new FactyCfdi($this->db);
         $cfdi->id  = (int) $row->rowid;
         $cfdi->env = (string) $row->env;
 
-        if ($invoices) {
-            $cfdi->markStamped($invoices[0]);
+        if ($invoice !== null) {
+            $cfdi->markStamped($invoice);
 
             return;
         }
 
         $cfdi->markFailed(
-            'El timbrado no se completó y Facty no tiene ningún CFDI con esta llave de idempotencia. '
-            . 'Puedes volver a intentarlo desde la factura.'
+            'El timbrado no se completó: Facty no tiene ningún CFDI con esta solicitud. '
+            . 'Puedes volver a intentarlo desde la pestaña CFDI de la factura.'
         );
+    }
+
+    /** Igual que el anterior, para el complemento de pago. */
+    private function reconcilePayment(int $rowId): void
+    {
+        $row = $this->fetchRow('factymx_payment', $rowId);
+        if ($row === null || $row->status !== FactyPayment::STATUS_PENDING) {
+            return;
+        }
+
+        $invoice = $this->findByIdempotencyKey((string) $row->env, (string) $row->idempotency_key);
+
+        $rec = new FactyPayment($this->db);
+        $rec->id  = (int) $row->rowid;
+        $rec->env = (string) $row->env;
+
+        if ($invoice !== null) {
+            // El REP es un comprobante de tipo P: el id que devuelve la búsqueda
+            // es el del CFDI, no el del pago. Se guarda lo que se sabe con
+            // certeza y se deja el id de pago en blanco antes que inventarlo.
+            $rec->facty_invoice_id = isset($invoice['id']) ? (string) $invoice['id'] : null;
+            $rec->uuid             = isset($invoice['uuid']) ? (string) $invoice['uuid'] : null;
+            $rec->status           = FactyPayment::STATUS_STAMPED;
+            $rec->stamped_at       = dol_print_date(dol_now(), '%Y-%m-%d %H:%M:%S');
+            $rec->last_error       = null;
+            $rec->update();
+
+            return;
+        }
+
+        $rec->markFailed(
+            'El complemento no se timbró: Facty no tiene ningún comprobante con esta solicitud. '
+            . 'Puedes volver a intentarlo desde la pestaña del pago.'
+        );
+    }
+
+    /**
+     * Busca en Facty el comprobante de una llave de idempotencia.
+     *
+     * **Verifica que lo que vuelve sea lo que se pidió.** No basta con tomar el
+     * primer elemento: si el filtro dejara de aplicarse — por un cambio del lado
+     * del servidor, por un proxy que se come el parámetro — la respuesta sería
+     * la factura más reciente de la organización, y adoptarla marcaría este
+     * documento con el folio fiscal de otro. Ante la duda se devuelve null, que
+     * como mucho deja el registro para revisión manual.
+     *
+     * @return array|null
+     */
+    private function findByIdempotencyKey(string $env, string $key): ?array
+    {
+        if ($key === '') {
+            return null;
+        }
+
+        $client = new FactyClient($env);
+        $found  = $client->request(
+            'GET',
+            $client->orgPath('invoices?idempotencyKey=' . rawurlencode($key))
+        );
+
+        $invoices = isset($found['invoices']) && is_array($found['invoices']) ? $found['invoices'] : array();
+
+        foreach ($invoices as $inv) {
+            if (isset($inv['idempotencyKey']) && (string) $inv['idempotencyKey'] === $key) {
+                return $inv;
+            }
+        }
+
+        if ($invoices) {
+            // Llegó algo, pero no lo que se preguntó. Es exactamente el caso que
+            // esta comprobación existe para atrapar, y merece quedar registrado.
+            dol_syslog(
+                'FactyJob: la búsqueda por llave de idempotencia devolvió comprobantes que no corresponden ('
+                . $key . '). No se adopta ninguno.',
+                LOG_WARNING
+            );
+        }
+
+        return null;
+    }
+
+    /** Refresca los catálogos pequeños que se usan en los formularios. */
+    private function refreshCatalogs(): void
+    {
+        $catalog = new FactyCatalog($this->db);
+
+        foreach (array('UsoCfdi', 'FormaPago', 'RegimenFiscal', 'Moneda', 'ObjetoImp', 'TipoRelacion') as $type) {
+            $catalog->all($type, true);
+        }
+    }
+
+    private function fetchRow(string $table, int $rowId)
+    {
+        $sql = 'SELECT * FROM ' . MAIN_DB_PREFIX . $table . ' WHERE rowid = ' . $rowId;
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return null;
+        }
+        $row = $this->db->fetch_object($res);
+        $this->db->free($res);
+
+        return $row ?: null;
     }
 
     private function reschedule($row, string $error): void
@@ -259,7 +412,7 @@ class FactyJob
         $delay = min(3600, 60 * (2 ** ($attempts - 1)));
 
         $sql = 'UPDATE ' . MAIN_DB_PREFIX . 'factymx_job SET '
-            . 'attempts = ' . $attempts . ", "
+            . 'attempts = ' . $attempts . ', '
             . "next_run_at = '" . $this->db->idate(dol_time_plus_duree(dol_now(), $delay, 's')) . "', "
             . "last_error = '" . $this->db->escape($error) . "' "
             . 'WHERE rowid = ' . ((int) $row->rowid);

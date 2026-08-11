@@ -26,6 +26,7 @@ if (!$res) {
 require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
 require_once __DIR__ . '/../lib/factymx.lib.php';
 require_once __DIR__ . '/../class/FactyConfig.class.php';
+require_once __DIR__ . '/../class/FactyJob.class.php';
 
 global $db, $langs, $user, $conf;
 
@@ -35,7 +36,25 @@ if (!$user->admin && !$user->hasRight('factymx', 'config', 'write')) {
     accessforbidden();
 }
 
-$env = FactyConfig::env();
+$env    = FactyConfig::env();
+$action = GETPOST('action', 'aZ09');
+
+// Reintentar un trabajo agotado. Se limita a poner el contador a cero y la
+// próxima ejecución en "ahora": el trabajo sigue siendo una RECONCILIACIÓN, así
+// que reintentarlo pregunta de nuevo, no vuelve a timbrar. Sin este botón, un
+// trabajo agotado sólo se recupera tocando la base a mano.
+if ($action === 'retry' && $user->hasRight('factymx', 'config', 'write')) {
+    $jobId = GETPOSTINT('job');
+    if ($jobId > 0) {
+        $sql = 'UPDATE ' . MAIN_DB_PREFIX . "factymx_job
+                SET status = '" . $db->escape(FactyJob::STATUS_PENDING) . "', attempts = 0,
+                    next_run_at = '" . $db->idate(dol_now()) . "', last_error = NULL
+                WHERE rowid = " . $jobId . ' AND entity = ' . ((int) $conf->entity);
+        if ($db->query($sql)) {
+            setEventMessages('Trabajo reprogramado. Se ejecutará en la próxima pasada del cron.', null, 'mesgs');
+        }
+    }
+}
 
 llxHeader('', 'Facty — Diagnóstico');
 print load_fiche_titre('Facty — Configuración', '', 'factymx@factymx');
@@ -47,7 +66,7 @@ print '<div class="div-table-responsive-no-min">';
 print '<table class="noborder centpercent"><tr class="liste_titre">'
     . '<td colspan="6">Trabajos en cola (' . FactyConfig::label($env) . ')</td></tr>';
 print '<tr class="liste_titre"><td>Tipo</td><td>Referencia</td><td>Intentos</td>'
-    . '<td>Próximo intento</td><td>Estado</td><td>Último error</td></tr>';
+    . '<td>Próximo intento</td><td>Estado</td><td>Último error</td><td></td></tr>';
 
 $sql = 'SELECT rowid, kind, ref_table, ref_id, attempts, next_run_at, status, last_error
         FROM ' . MAIN_DB_PREFIX . "factymx_job
@@ -68,12 +87,18 @@ if ($resq) {
         print '<td class="factymx-status-' . dol_escape_htmltag($row->status) . '">'
             . dol_escape_htmltag($row->status) . '</td>';
         print '<td>' . dol_escape_htmltag((string) $row->last_error) . '</td>';
+        print '<td class="right">';
+        if ($row->status === FactyJob::STATUS_FAILED && $user->hasRight('factymx', 'config', 'write')) {
+            print '<a class="button smallpaddingimp" href="' . $_SERVER['PHP_SELF']
+                . '?action=retry&job=' . ((int) $row->rowid) . '&token=' . newToken() . '">Reintentar</a>';
+        }
+        print '</td>';
         print '</tr>';
     }
     $db->free($resq);
 }
 if ($njobs === 0) {
-    print '<tr class="oddeven"><td colspan="6"><span class="opacitymedium">Sin trabajos pendientes.</span></td></tr>';
+    print '<tr class="oddeven"><td colspan="7"><span class="opacitymedium">Sin trabajos pendientes.</span></td></tr>';
 }
 print '</table></div><br>';
 
