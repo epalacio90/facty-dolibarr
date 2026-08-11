@@ -56,10 +56,37 @@ timbraron.
 La llave se crea en Facty → Configuración → API Keys. Se guarda cifrada y no se
 vuelve a mostrar completa.
 
+## Generar el ZIP desde el código
+
+```bash
+./build/make-zip.sh          # deja dist/factymx-<versión>.zip
+```
+
+El script comprueba la sintaxis de todo el árbol antes de empaquetar: publicar un
+ZIP con un error de sintaxis es peor que no publicarlo, porque el cliente lo
+instala y se le rompe Dolibarr.
+
+## Documentación
+
+- [COMPATIBILIDAD.md](COMPATIBILIDAD.md) — versiones admitidas, qué hace y qué no,
+  convivencia con otro módulo de facturación, soporte y seguridad.
+- [CHANGELOG.md](CHANGELOG.md) — cambios por versión.
+
 ## Estado
 
-En desarrollo — sub-fase B (esqueleto y configuración). Todavía **no** apto para
-producción.
+**Funcionalmente completo para la v1, y todavía NO apto para producción.**
+
+Están hechas las sub-fases B a K: configuración de los dos ambientes, datos
+maestros, timbrado de Ingreso y Egreso, cancelación, estatus SAT, descarga de
+artefactos, complemento de pago, CFDI relacionados, factura global, listas,
+reconciliación y empaquetado.
+
+Lo que falta es lo que ningún commit puede sustituir: **este código nunca se ha
+ejecutado contra una instancia real de Dolibarr.** Lo verificado es que compila
+en PHP 8.1–8.3, que cumple PSR-12 y que pasa las guardas del proyecto. Antes de
+ponerlo frente a un cliente hay que recorrerlo entero contra un Dolibarr de
+verdad y el ambiente de pruebas de Facty —timbrar, cancelar, complementar,
+reconciliar— y arreglar lo que salga.
 
 ## Licencia
 

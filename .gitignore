@@ -1,4 +1,6 @@
 .DS_Store
 *.log
-/build/
+# Los ZIP generados no se versionan: se adjuntan a la release.
 /dist/
+# Artefactos parciales de descargas interrumpidas.
+*.part
