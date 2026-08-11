@@ -37,9 +37,14 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
-          tools: phpcs
+          # Versión fijada: los códigos de sniff cambian entre versiones y una
+          # exclusión que funciona en una falla en otra. Sin fijarla, CI y local
+          # discrepan sin que nadie cambie el código.
+          tools: phpcs:3.13.4
       - name: PHP_CodeSniffer (PSR-12)
-        run: phpcs --standard=phpcs.xml --report=full
+        # -s muestra el código del sniff en cada error: sin eso, arreglar un
+        # fallo de estilo es adivinar cuál regla lo produjo.
+        run: phpcs --standard=phpcs.xml --report=full -s
 
   guards:
     name: guardas del módulo

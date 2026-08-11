@@ -36,6 +36,18 @@
         <exclude-pattern>*/class/FactyExceptions.class.php</exclude-pattern>
     </rule>
 
+    <!-- Estas dos se apagan por severidad, no con <exclude>, a propósito: la
+         exclusión depende de la ruta por la que el estándar incluyó el sniff, y
+         esa ruta cambió entre versiones de phpcs — el resultado fue verde en
+         local y rojo en CI por la misma configuración. Apagar por severidad no
+         depende de la versión. -->
+    <rule ref="Squiz.Classes.ValidClassName">
+        <severity>0</severity>
+    </rule>
+    <rule ref="PSR1.Classes.ClassDeclaration">
+        <severity>0</severity>
+    </rule>
+
     <rule ref="Generic.Files.LineLength">
         <properties>
             <property name="lineLimit" value="120"/>
