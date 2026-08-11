@@ -157,6 +157,8 @@ class modFactyMX extends DolibarrModules
         $this->tabs = array(
             'invoice:+factymx:CFDI:factymx@factymx:'
                 . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/facture/cfdi.php?facid=__ID__',
+            'payment:+factymxrep:Complemento de Pago:factymx@factymx:'
+                . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/paiement/rep.php?id=__ID__',
             'thirdparty:+factymxfiscal:Datos fiscales CFDI:factymx@factymx:'
                 . '$user->hasRight(\'factymx\', \'cfdi\', \'read\'):/factymx/societe/fiscal.php?socid=__ID__',
             'product:+factymxsat:Datos SAT:factymx@factymx:'
