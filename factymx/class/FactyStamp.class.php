@@ -210,7 +210,7 @@ class FactyStamp
         } catch (FactyApiException $e) {
             $msg = $e->userMessage();
             if ($e->fieldErrors) {
-                $msg .= ' (' . implode('; ', $e->fieldErrors) . ')';
+                $msg .= ' (' . $e->fieldErrorsText() . ')';
             }
             $cfdi->markFailed($msg, $e->requestId);
             $this->error = $msg;

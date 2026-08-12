@@ -245,7 +245,8 @@ class FactyRep
         if ($moneda !== 'MXN') {
             $body['moneda'] = $moneda;
             if (!empty($opts['tipoCambio'])) {
-                $body['tipoCambio'] = (string) $opts['tipoCambio'];
+                // Número, no texto (misma razón que en la factura).
+                $body['tipoCambio'] = (float) $opts['tipoCambio'];
             }
         }
 
@@ -261,7 +262,7 @@ class FactyRep
         } catch (FactyApiException $e) {
             $msg = $e->userMessage();
             if ($e->fieldErrors) {
-                $msg .= ' (' . implode('; ', $e->fieldErrors) . ')';
+                $msg .= ' (' . $e->fieldErrorsText() . ')';
             }
             $rec->markFailed($msg, $e->requestId);
             $this->error = $msg;

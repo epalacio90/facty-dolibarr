@@ -68,6 +68,28 @@ class FactyApiException extends Exception
         return $this->httpStatus === 429 || $this->httpStatus >= 500;
     }
 
+    /**
+     * Errores por campo, legibles, CON el nombre del campo.
+     *
+     * `fieldErrors` viene como mapa ruta → mensaje. Aplanarlo con implode tira
+     * las llaves y deja mensajes como "expected number, received string" sin
+     * decir de qué campo hablan — que es exactamente lo que convierte un error
+     * de validación de treinta segundos en una hora de búsqueda.
+     */
+    public function fieldErrorsText(): string
+    {
+        if (!$this->fieldErrors) {
+            return '';
+        }
+
+        $parts = array();
+        foreach ($this->fieldErrors as $campo => $mensaje) {
+            $parts[] = $campo . ': ' . $mensaje;
+        }
+
+        return implode('; ', $parts);
+    }
+
     /** Mensaje accionable para el usuario, en vez del texto crudo del API. */
     public function userMessage(): string
     {

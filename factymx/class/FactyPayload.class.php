@@ -84,7 +84,10 @@ class FactyPayload
             if ($tc > 0) {
                 // Dolibarr guarda "cuántas divisas por peso"; el SAT pide lo
                 // contrario: cuántos pesos vale una unidad de la divisa.
-                $body['tipoCambio'] = (string) round(1 / $tc, 6);
+                // NÚMERO, no texto: Facty valida `z.number()` y un "20.5"
+                // entrecomillado se rechaza con un 422 que sólo dice "expected
+                // number, received string" — sin nombrar el campo.
+                $body['tipoCambio'] = round(1 / $tc, 6);
             } else {
                 $this->problems[] = 'La factura está en ' . $moneda . ' pero no tiene tipo de cambio.';
             }
