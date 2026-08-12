@@ -137,6 +137,12 @@ class FactyStamp
         $cfdi->cfdi_type       = $isEgreso ? 'egreso' : 'ingreso';
         $cfdi->idempotency_key = factymxIdempotencyKey('facture', (int) $facture->id);
 
+        // ¿Es un reintento de algo que ya falló? Hay que averiguarlo ANTES de
+        // reservar, porque `reserve()` reutiliza la fila fallida y la deja en
+        // `pending`, borrando la evidencia.
+        $previo      = FactyCfdi::fetchByFacture($this->db, (int) $facture->id, $this->env);
+        $esReintento = ($previo !== null && $previo->status === FactyCfdi::STATUS_FAILED);
+
         $reserved = $cfdi->reserve();
         if ($reserved === 0) {
             $this->error = 'Ya existe un timbrado en curso o completado para esta factura.';
@@ -193,6 +199,16 @@ class FactyStamp
         $client->setLogger(function (array $entry) {
             $this->writeLog($entry);
         });
+
+        // La llave de idempotencia es una función del id de la factura, así que
+        // no cambia entre intentos. Sin decirle a Facty que ESTE es un reintento
+        // de algo que ya falló, contestaría 409 pidiendo "una llave nueva" —
+        // que este cliente, por diseño, no puede fabricar. Sólo se manda cuando
+        // el intento anterior falló de verdad; nunca sobre uno en proceso, donde
+        // el CFDI podría existir.
+        if ($esReintento) {
+            $body['allowRetryOnFailed'] = true;
+        }
 
         try {
             $response = $client->request('POST', $client->orgPath('invoices'), $body);
