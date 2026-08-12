@@ -6,6 +6,13 @@ require_once __DIR__ . '/FactyConfig.class.php';
 require_once __DIR__ . '/FactyClient.class.php';
 require_once __DIR__ . '/FactyCfdi.class.php';
 
+// dol_is_dir(), dol_mkdir() y dolChmod() viven en files.lib.php, que
+// main.inc.php NO carga siempre. Sin esto el timbrado SÍ ocurre y después la
+// página muere con un "undefined function" — pantalla en blanco, sin mensaje y
+// sin rastro del CFDI recién emitido, que es la peor forma posible de fallar:
+// el comprobante existe y el usuario no lo sabe.
+require_once DOL_DOCUMENT_ROOT . '/core/lib/files.lib.php';
+
 /**
  * \file    class/FactyArtifacts.class.php
  * \ingroup factymx

@@ -4,6 +4,11 @@
 
 require_once __DIR__ . '/FactyConfig.class.php';
 
+// dol_time_plus_duree() / dol_stringtotime() viven en date.lib.php. Se carga
+// explícitamente en vez de confiar en que la página que nos incluyó ya lo hizo:
+// estas clases también corren desde el cron, donde el contexto es otro.
+require_once DOL_DOCUMENT_ROOT . '/core/lib/date.lib.php';
+
 /**
  * \file    class/FactyCfdi.class.php
  * \ingroup factymx

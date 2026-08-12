@@ -22,6 +22,9 @@ if (!$res) {
 require_once DOL_DOCUMENT_ROOT . '/compta/paiement/class/paiement.class.php';
 require_once DOL_DOCUMENT_ROOT . '/compta/facture/class/facture.class.php';
 require_once DOL_DOCUMENT_ROOT . '/core/lib/bank.lib.php';
+// payment_prepare_head() está aquí, no en bank.lib.php. Sin esto la pestaña del
+// complemento moría en blanco al abrirla.
+require_once DOL_DOCUMENT_ROOT . '/core/lib/payments.lib.php';
 require_once __DIR__ . '/../lib/factymx.lib.php';
 require_once __DIR__ . '/../class/FactyConfig.class.php';
 require_once __DIR__ . '/../class/FactyCatalog.class.php';
