@@ -39,7 +39,8 @@ class FactyPayload
      * @param Facture     $facture   Factura validada de Dolibarr.
      * @param string      $clientId  Id del cliente en Facty (FactyClientSync).
      * @param array       $opts      usoCfdi, formaPago, metodoPago, serie,
-     *                               cfdiRelacionados, productMap, exportacion.
+     *                               cfdiRelacionados, productMap, productData,
+     *                               exportacion.
      * @return array Cuerpo listo para POST /invoices.
      */
     public function fromFacture(Facture $facture, string $clientId, array $opts = array()): array
@@ -54,7 +55,11 @@ class FactyPayload
             'usoCfdi'        => (string) ($opts['usoCfdi'] ?? ''),
             'formaPago'      => (string) ($opts['formaPago'] ?? ''),
             'metodoPago'     => (string) ($opts['metodoPago'] ?? 'PUE'),
-            'items'          => $this->mapLines($facture, $opts['productMap'] ?? array()),
+            'items'          => $this->mapLines(
+                $facture,
+                $opts['productMap'] ?? array(),
+                $opts['productData'] ?? array()
+            ),
             'idempotencyKey' => (string) ($opts['idempotencyKey'] ?? ''),
         );
 
@@ -166,7 +171,7 @@ class FactyPayload
      *
      * @param array<int,string> $productMap fk_product => id en Facty
      */
-    private function mapLines(Facture $facture, array $productMap): array
+    private function mapLines(Facture $facture, array $productMap, array $productData): array
     {
         $items = array();
 
@@ -185,20 +190,48 @@ class FactyPayload
             );
 
             $fkProduct = (int) $line->fk_product;
-            $clave     = $this->lineExtra($line, 'factymx_claveprodserv');
-            $unidad    = $this->lineExtra($line, 'factymx_claveunidad');
 
-            if ($fkProduct > 0 && isset($productMap[$fkProduct]) && $clave === '' && $unidad === '') {
-                // Producto sincronizado y sin excepción por línea: Facty ya
-                // tiene sus claves, así que basta con referirlo.
+            // Precedencia de las claves del SAT, y este orden importa:
+            //
+            //   1. La LÍNEA, si trae excepción — una línea puede diferir de su
+            //      producto y esa excepción manda.
+            //   2. El PRODUCTO del catálogo, que es donde están en el caso
+            //      normal: el usuario las capturó una vez en la ficha del
+            //      producto y espera, con razón, no tener que repetirlas en cada
+            //      factura.
+            //   3. Sin ninguna de las dos, es un problema real.
+            //
+            // La versión anterior sólo miraba la línea, así que un producto con
+            // sus claves bien puestas se reportaba como incompleto.
+            $clave  = $this->lineExtra($line, 'factymx_claveprodserv');
+            $unidad = $this->lineExtra($line, 'factymx_claveunidad');
+            $override = ($clave !== '' || $unidad !== '');
+
+            $prod = ($fkProduct > 0 && isset($productData[$fkProduct])) ? $productData[$fkProduct] : null;
+
+            if ($clave === '' && $prod !== null) {
+                $clave = (string) ($prod['claveProdServ'] ?? '');
+            }
+            if ($unidad === '' && $prod !== null) {
+                $unidad = (string) ($prod['claveUnidad'] ?? '');
+            }
+
+            if ($fkProduct > 0 && isset($productMap[$fkProduct]) && !$override) {
+                // Producto ya sincronizado y sin excepción por línea: basta con
+                // referirlo, Facty tiene sus datos.
                 $item['productId'] = $productMap[$fkProduct];
             } else {
-                // Línea libre, o línea que sobreescribe las claves del producto.
                 if ($clave === '' || $unidad === '') {
+                    $donde = $fkProduct > 0
+                        ? 'Captúralas en la pestaña "Datos SAT" del producto.'
+                        : 'Es una línea de texto libre: captúralas en la propia línea de la factura.';
                     $this->problems[] = 'Línea ' . $n . ' ("' . dol_trunc((string) $line->desc, 40) . '"): '
-                        . 'falta la clave de producto/servicio o la clave de unidad del SAT.';
+                        . 'falta la clave de producto/servicio o la clave de unidad del SAT. ' . $donde;
                     continue;
                 }
+                // Se mandan en línea. Es igual de válido para el SAT que
+                // referir un producto, y evita que un producto sin sincronizar
+                // detenga una factura que por lo demás está completa.
                 $item['claveProdServ'] = $clave;
                 $item['claveUnidad']   = $unidad;
                 $item['description']   = (string) ($line->desc !== '' ? $line->desc : $line->product_label);
@@ -230,6 +263,9 @@ class FactyPayload
             }
 
             $objeto = $this->lineExtra($line, 'factymx_objetoimp');
+            if ($objeto === '' && $prod !== null) {
+                $objeto = (string) ($prod['objetoImp'] ?? '');
+            }
             if ($objeto !== '') {
                 $item['objetoImp'] = $objeto;
             }

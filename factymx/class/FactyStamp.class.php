@@ -10,6 +10,12 @@ require_once __DIR__ . '/FactyPayload.class.php';
 require_once __DIR__ . '/FactyClientSync.class.php';
 require_once __DIR__ . '/FactyProductSync.class.php';
 
+// Se cargan aquí y no se dan por hecho: esta clase también se usa desde el
+// trigger de timbrado automático, donde la página que la invoca puede no haber
+// cargado las clases del núcleo.
+require_once DOL_DOCUMENT_ROOT . '/societe/class/societe.class.php';
+require_once DOL_DOCUMENT_ROOT . '/product/class/product.class.php';
+
 /**
  * \file    class/FactyStamp.class.php
  * \ingroup factymx
@@ -94,7 +100,11 @@ class FactyStamp
 
         // Conceptos: se arma el cuerpo en seco para recoger todos los problemas.
         $payload = new FactyPayload();
-        $payload->fromFacture($facture, 'precheck', $this->buildOpts($facture, $opts, array()));
+        $payload->fromFacture(
+            $facture,
+            'precheck',
+            $this->buildOpts($facture, $opts, array(), $this->collectProductData($facture))
+        );
         foreach ($payload->problems as $p) {
             $this->problems[] = $p;
         }
@@ -165,7 +175,11 @@ class FactyStamp
 
         // --- 3. Cuerpo.
         $payload = new FactyPayload();
-        $body    = $payload->fromFacture($facture, $clientId, $this->buildOpts($facture, $opts, $productMap));
+        $body    = $payload->fromFacture(
+            $facture,
+            $clientId,
+            $this->buildOpts($facture, $opts, $productMap, $this->collectProductData($facture))
+        );
 
         if ($payload->problems) {
             $this->problems = $payload->problems;
@@ -254,8 +268,12 @@ class FactyStamp
     }
 
     /** Opciones efectivas: lo que mandó la pantalla, con los valores por omisión debajo. */
-    private function buildOpts(Facture $facture, array $opts, array $productMap): array
-    {
+    private function buildOpts(
+        Facture $facture,
+        array $opts,
+        array $productMap,
+        array $productData = array()
+    ): array {
         $usoCfdi = $opts['usoCfdi'] ?? ($facture->array_options['options_factymx_usocfdi'] ?? '');
         if ($usoCfdi === '') {
             $usoCfdi = getDolGlobalString('FACTYMX_DEFAULT_USOCFDI');
@@ -276,7 +294,53 @@ class FactyStamp
             'informacionGlobal' => $opts['informacionGlobal'] ?? null,
             'idempotencyKey'    => factymxIdempotencyKey('facture', (int) $facture->id),
             'productMap'        => $productMap,
+            'productData'       => $productData,
         );
+    }
+
+    /**
+     * Lee las claves del SAT de los productos que usa la factura.
+     *
+     * Es lo que permite que el usuario capture las claves UNA vez en la ficha
+     * del producto y no en cada línea de cada factura. Antes el mapeador sólo
+     * miraba los extrafields de la línea, así que un producto perfectamente
+     * capturado se reportaba como incompleto — y peor, la revisión previa
+     * corría siempre con esta información vacía, de modo que el aviso aparecía
+     * incluso cuando todo estaba bien.
+     *
+     * Son lecturas a la base, no a la red: se puede hacer en la revisión previa
+     * sin coste ni efectos.
+     *
+     * @return array<int,array{claveProdServ:string,claveUnidad:string,objetoImp:string}>
+     */
+    private function collectProductData(Facture $facture): array
+    {
+        $out = array();
+
+        foreach ($facture->lines as $line) {
+            $fk = (int) $line->fk_product;
+            if ($fk <= 0 || isset($out[$fk])) {
+                continue;
+            }
+
+            $product = new Product($this->db);
+            if ($product->fetch($fk) <= 0) {
+                continue;
+            }
+            // fetch() no siempre trae los extrafields; sin esto el arreglo llega
+            // vacío y volveríamos al mismo fallo por otra vía.
+            $product->fetch_optionals();
+
+            $opt = $product->array_options ?? array();
+
+            $out[$fk] = array(
+                'claveProdServ' => trim((string) ($opt['options_factymx_claveprodserv'] ?? '')),
+                'claveUnidad'   => trim((string) ($opt['options_factymx_claveunidad'] ?? '')),
+                'objetoImp'     => trim((string) ($opt['options_factymx_objetoimp'] ?? '')),
+            );
+        }
+
+        return $out;
     }
 
     /** Traduce el modo de pago de Dolibarr a la clave del SAT, según el mapeo configurado. */
