@@ -274,7 +274,22 @@ class FactyStamp
         array $productMap,
         array $productData = array()
     ): array {
-        $usoCfdi = $opts['usoCfdi'] ?? ($facture->array_options['options_factymx_usocfdi'] ?? '');
+        // Precedencia del uso del CFDI: lo elegido en la pantalla → lo fijado en
+        // la factura → **lo configurado en la ficha del cliente** → el valor por
+        // omisión del módulo.
+        //
+        // El del cliente es el que casi siempre acierta: el uso depende de qué
+        // hace el receptor con el comprobante (G03 gastos en general, I01
+        // construcciones, D01 honorarios médicos…), y eso es una propiedad del
+        // cliente, no de cada factura. Se captura una vez en su ficha y deja de
+        // preguntarse en cada emisión.
+        $usoCfdi = (string) ($opts['usoCfdi'] ?? '');
+        if ($usoCfdi === '') {
+            $usoCfdi = (string) ($facture->array_options['options_factymx_usocfdi'] ?? '');
+        }
+        if ($usoCfdi === '') {
+            $usoCfdi = $this->usoCfdiDelCliente((int) $facture->socid);
+        }
         if ($usoCfdi === '') {
             $usoCfdi = getDolGlobalString('FACTYMX_DEFAULT_USOCFDI');
         }
@@ -296,6 +311,31 @@ class FactyStamp
             'productMap'        => $productMap,
             'productData'       => $productData,
         );
+    }
+
+    /**
+     * Uso del CFDI configurado en la ficha del tercero.
+     *
+     * Lectura directa a la tabla de extrafields en vez de cargar el Societe
+     * completo: se llama en cada revisión previa y sólo hace falta un campo.
+     */
+    private function usoCfdiDelCliente(int $socid): string
+    {
+        if ($socid <= 0) {
+            return '';
+        }
+
+        $sql = 'SELECT factymx_usocfdi FROM ' . MAIN_DB_PREFIX . 'societe_extrafields
+                WHERE fk_object = ' . $socid;
+
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return '';
+        }
+        $row = $this->db->fetch_object($res);
+        $this->db->free($res);
+
+        return $row ? trim((string) $row->factymx_usocfdi) : '';
     }
 
     /**

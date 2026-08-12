@@ -160,10 +160,28 @@ class FactyCatalog
         return isset($all[$code]);
     }
 
-    /** Renderiza un `<select>`; deja ver el estado del catálogo si no es fresco. */
-    public function selectHtml(string $catalog, string $name, string $selected = '', bool $allowEmpty = true): string
-    {
+    /**
+     * Renderiza un `<select>`; deja ver el estado del catálogo si no es fresco.
+     *
+     * `$exclude` sirve para no ofrecer claves que el módulo no puede emitir.
+     * Enseñarlas sería una trampa: el usuario elige una opción legítima del
+     * catálogo del SAT, el módulo la manda y el comprobante se rechaza — o peor,
+     * se emite mal. Una opción que no lleva a ningún lado no debe estar.
+     *
+     * @param string[] $exclude Claves que no se muestran.
+     */
+    public function selectHtml(
+        string $catalog,
+        string $name,
+        string $selected = '',
+        bool $allowEmpty = true,
+        array $exclude = array()
+    ): string {
         $items = $this->all($catalog);
+
+        foreach ($exclude as $code) {
+            unset($items[$code]);
+        }
 
         if ($this->state === self::STATE_UNAVAILABLE) {
             // Campo de texto como plan B: sin catálogo, el usuario todavía puede

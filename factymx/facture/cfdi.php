@@ -52,6 +52,12 @@ if ($object->fetch($facid) <= 0) {
 }
 $object->fetch_thirdparty();
 $object->fetch_optionals();
+// fetch_thirdparty() carga el tercero pero NO sus extrafields, así que sin esto
+// el uso del CFDI configurado en su ficha llegaría vacío y la pantalla lo pediría
+// de nuevo. Es el mismo tropiezo que con los productos.
+if (is_object($object->thirdparty)) {
+    $object->thirdparty->fetch_optionals();
+}
 foreach ($object->lines as $line) {
     if (method_exists($line, 'fetch_optionals')) {
         $line->fetch_optionals();
@@ -296,12 +302,55 @@ if ($cfdi !== null && in_array($cfdi->status, array(FactyCfdi::STATUS_STAMPED, F
         print '</div><br>';
     }
 
-    // Revisión previa: sin llamadas a Facty y sin gastar nada.
-    $ready = $stamp->precheck($object);
+    // Valores que el formulario va a mostrar. Se calculan ANTES de la revisión
+    // previa y se le pasan: si no, la revisión corre sin ellos, reporta "falta
+    // el uso del CFDI" y —peor— deshabilita el botón con el que el usuario
+    // habría elegido justamente eso. La pantalla se quedaba sin salida.
+    $usoActual = (string) ($object->array_options['options_factymx_usocfdi'] ?? '');
+    if ($usoActual === '') {
+        // Del cliente: el uso depende de qué hace el receptor con el
+        // comprobante, así que se captura una vez en su ficha.
+        $usoActual = (string) ($object->thirdparty->array_options['options_factymx_usocfdi'] ?? '');
+    }
+    if ($usoActual === '') {
+        $usoActual = getDolGlobalString('FACTYMX_DEFAULT_USOCFDI');
+    }
 
-    if (!$ready) {
+    $metodoActual = (string) ($object->array_options['options_factymx_metodopago'] ?? '');
+    if ($metodoActual === '') {
+        $metodoActual = getDolGlobalString('FACTYMX_DEFAULT_METODOPAGO') ?: 'PUE';
+    }
+
+    $formaMapeada = '';
+    if (!empty($object->mode_reglement_code)) {
+        $formaMapeada = getDolGlobalString(
+            'FACTYMX_FORMAPAGO_' . strtoupper(dol_sanitizeFileName((string) $object->mode_reglement_code))
+        );
+    }
+
+    // Revisión previa: sin llamadas a Facty y sin gastar nada.
+    $ready = $stamp->precheck($object, array(
+        'usoCfdi'    => $usoActual,
+        'metodoPago' => $metodoActual,
+        'formaPago'  => $formaMapeada,
+    ));
+
+    // Los campos que se eligen en ESTA pantalla no deben bloquear el botón: el
+    // usuario los está a punto de llenar. Se separan de los problemas reales
+    // —RFC del receptor, claves del producto, factura en borrador— que no se
+    // pueden resolver desde aquí.
+    $bloqueantes = array();
+    foreach ($stamp->problems as $p) {
+        if (strpos($p, 'Falta el uso del CFDI') === 0 || strpos($p, 'Falta la forma de pago') === 0) {
+            continue;
+        }
+        $bloqueantes[] = $p;
+    }
+    $ready = empty($bloqueantes);
+
+    if ($bloqueantes) {
         print '<div class="warning"><strong>Antes de timbrar hay que resolver esto:</strong><ul>';
-        foreach ($stamp->problems as $p) {
+        foreach ($bloqueantes as $p) {
             print '<li>' . dol_escape_htmltag($p) . '</li>';
         }
         print '</ul></div><br>';
@@ -317,18 +366,26 @@ if ($cfdi !== null && in_array($cfdi->status, array(FactyCfdi::STATUS_STAMPED, F
         . ($isEgreso ? 'Egreso — nota de crédito' : 'Ingreso — factura') . '</td></tr>';
 
     print '<tr><td>Uso del CFDI</td><td>';
-    $usoActual = (string) ($object->array_options['options_factymx_usocfdi'] ?? '');
-    if ($usoActual === '') {
-        $usoActual = getDolGlobalString('FACTYMX_DEFAULT_USOCFDI');
+    // Se ocultan los usos que este módulo no puede emitir. Ofrecerlos sería una
+    // trampa: son claves legítimas del catálogo del SAT, pero elegirlas aquí
+    // produce un comprobante que se rechaza o que sale mal.
+    //   CN01 — nómina: el módulo no emite recibos de nómina.
+    //   CP01 — pagos: lo pone Facty solo al timbrar un complemento; en una
+    //          factura no aplica.
+    //   P01  — por definir: el SAT lo retiró del catálogo y lo rechaza.
+    print $catalog->selectHtml(
+        'UsoCfdi',
+        'usocfdi',
+        $usoActual,
+        false,
+        array('CN01', 'CP01', 'P01')
+    );
+    if ($usoActual !== '') {
+        print ' <span class="opacitymedium">Tomado de la ficha del cliente.</span>';
     }
-    print $catalog->selectHtml('UsoCfdi', 'usocfdi', $usoActual, false);
     print '</td></tr>';
 
     print '<tr><td>Método de pago</td><td>';
-    $metodoActual = (string) ($object->array_options['options_factymx_metodopago'] ?? '');
-    if ($metodoActual === '') {
-        $metodoActual = getDolGlobalString('FACTYMX_DEFAULT_METODOPAGO') ?: 'PUE';
-    }
     print '<select name="metodopago" class="flat">';
     print '<option value="PUE"' . ($metodoActual === 'PUE' ? ' selected' : '') . '>PUE — una sola exhibición</option>';
     print '<option value="PPD"' . ($metodoActual === 'PPD' ? ' selected' : '') . '>PPD — parcialidades o diferido</option>';
@@ -340,12 +397,6 @@ if ($cfdi !== null && in_array($cfdi->status, array(FactyCfdi::STATUS_STAMPED, F
     // Se preselecciona la clave mapeada al modo de pago de la factura, para que
     // el caso normal no exija ninguna decisión y el usuario sólo intervenga
     // cuando el mapeo falte o no aplique.
-    $formaMapeada = '';
-    if (!empty($object->mode_reglement_code)) {
-        $formaMapeada = getDolGlobalString(
-            'FACTYMX_FORMAPAGO_' . strtoupper(dol_sanitizeFileName((string) $object->mode_reglement_code))
-        );
-    }
     print $catalog->selectHtml('FormaPago', 'formapago', $formaMapeada, true);
     if ($formaMapeada === '' && !empty($object->mode_reglement_code)) {
         print ' <span class="warning">El modo de pago "' . dol_escape_htmltag((string) $object->mode_reglement_code)
